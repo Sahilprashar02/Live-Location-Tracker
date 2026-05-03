@@ -1,0 +1,8 @@
+node_modules
+dist
+.env
+.DS_Store
+server/data/*.jsonl
+server/data/*.log
+coverage
+.codex
