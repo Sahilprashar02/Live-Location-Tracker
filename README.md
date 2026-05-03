@@ -20,13 +20,18 @@ docker compose up -d kafka
 npm run dev
 ```
 
-If port `4000` or `5173` is already busy on your machine, use the fallback dev ports:
+The default dev command uses ports that avoid common conflicts on this machine:
+
+- Backend: `http://localhost:4010`
+- Frontend: `http://localhost:5174`
+
+Open `http://localhost:5174` in your browser.
+
+If you specifically want the original ports `4000` and `5173`, use:
 
 ```bash
-npm run dev:fallback
+npm run dev:default
 ```
-
-That starts the backend on `http://localhost:4010` and the frontend on `http://localhost:5174`.
 
 In another terminal, run the database processor:
 
