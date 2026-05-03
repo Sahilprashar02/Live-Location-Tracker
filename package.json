@@ -5,6 +5,7 @@
   "description": "Real-time authenticated live location tracking with Socket.IO, Kafka, and Leaflet.",
   "scripts": {
     "dev": "concurrently \"npm run dev --workspace server\" \"npm run dev --workspace client\"",
+    "dev:fallback": "concurrently \"PORT=4010 CLIENT_ORIGIN=http://localhost:5174 npm run dev --workspace server\" \"VITE_API_URL=http://localhost:4010 npm run dev --workspace client -- --port 5174\"",
     "dev:server": "npm run dev --workspace server",
     "dev:client": "npm run dev --workspace client",
     "db-processor": "npm run db-processor --workspace server",

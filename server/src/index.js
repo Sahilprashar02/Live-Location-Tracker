@@ -152,6 +152,16 @@ async function start() {
   await ensureLocationTopic();
   producer = await createProducer();
   await startSocketBroadcaster();
+  server.on("error", (error) => {
+    if (error.code === "EADDRINUSE") {
+      console.error(
+        `Port ${config.port} is already in use. Stop that process or start this app with PORT=4010 CLIENT_ORIGIN=http://localhost:5174 npm run dev:server.`
+      );
+      process.exit(1);
+    }
+
+    throw error;
+  });
   server.listen(config.port, () => {
     console.log(`API and Socket.IO server listening on http://localhost:${config.port}`);
   });
