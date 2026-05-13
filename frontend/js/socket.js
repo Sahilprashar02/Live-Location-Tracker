@@ -24,7 +24,10 @@ export const SocketManager = (() => {
     onConnectionChange = callbacks.onConnectionChange || (() => {});
     onError = callbacks.onError || (() => {});
 
-    const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3000';
+    // Safe check for Vite environment variables
+    const API_BASE = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE)
+      ? import.meta.env.VITE_API_BASE
+      : 'http://localhost:3000';
 
     const token = localStorage.getItem('auth_token');
 

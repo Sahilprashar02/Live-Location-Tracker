@@ -2,8 +2,10 @@
  * auth.js — Authentication UI logic
  */
 export const AuthManager = (() => {
-  // Use environment variable. Default to localhost for development.
-  const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3000';
+  // Safe check for Vite environment variables
+  const API_BASE = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE)
+    ? import.meta.env.VITE_API_BASE
+    : 'http://localhost:3000';
 
   /**
    * Check if user is currently authenticated
