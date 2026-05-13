@@ -5,7 +5,7 @@
 <h1 align="center">Live Location Tracker</h1>
 
 <p align="center">
-  A premium, real-time location sharing application built with Node.js, Socket.IO, Kafka, and MongoDB.
+  <b>A premium, real-time location sharing ecosystem built for high performance and scalability.</b>
 </p>
 
 <p align="center">
@@ -14,183 +14,137 @@
   <img alt="Socket.IO" src="https://img.shields.io/badge/Socket.IO-4-010101?style=for-the-badge&logo=socketdotio&logoColor=white">
   <img alt="Kafka" src="https://img.shields.io/badge/Apache_Kafka-KRaft-231F20?style=for-the-badge&logo=apachekafka&logoColor=white">
   <img alt="MongoDB" src="https://img.shields.io/badge/MongoDB-7-47A248?style=for-the-badge&logo=mongodb&logoColor=white">
-  <img alt="Docker" src="https://img.shields.io/badge/Docker_Compose-ready-2496ED?style=for-the-badge&logo=docker&logoColor=white">
   <img alt="License" src="https://img.shields.io/badge/License-MIT-blue?style=for-the-badge">
 </p>
 
-## Overview
+---
 
-Live Location Tracker lets authenticated users share their browser GPS position and see everyone move live on a dark interactive map. Location events are published to Kafka, then consumed independently for real-time broadcasting and MongoDB persistence.
+## 🚀 Overview
 
-The app runs as a single-origin Express server at `http://localhost:3000`: Express serves the frontend, handles Google OAuth sessions, exposes Socket.IO, and starts the Kafka consumers.
+Live Location Tracker is a state-of-the-art real-time application that allows users to share their live GPS positions on an interactive, high-fidelity map. Built with a focus on modern aesthetics and distributed system principles, it leverages **Apache Kafka** to handle high-throughput location events, ensuring that the system remains responsive even with hundreds of concurrent users.
 
-## Features
+### Why Kafka?
+Unlike traditional real-time apps that write to a database on every event (O(n) writes), this app uses Kafka to decouple the data flow:
+1. **Real-time Path**: Events are consumed by a broadcast worker and pushed to clients immediately via WebSockets.
+2. **Persistent Path**: A separate worker batches events and writes them to MongoDB in bulk, significantly reducing DB load.
 
-- Google OAuth 2.0 login with Passport.js.
-- Session storage in MongoDB using `connect-mongo`.
-- Real-time browser updates with Socket.IO.
-- Kafka topic `location-updates` for durable event flow.
-- Separate Kafka consumer groups for broadcasting and database writes.
-- MongoDB location history with user `lastSeen` updates.
-- Leaflet + CartoDB Dark Matter map tiles.
-- Share location button, live marker updates, user sidebar, and responsive UI.
-- Local Docker Compose for Kafka in KRaft mode and MongoDB.
+---
 
-## Architecture
+## ✨ Features
+
+- **🔐 Dual-Mode Authentication**: Seamlessly supports both **Google OAuth 2.0** sessions and **JWT-based** authentication for cross-domain and mobile compatibility.
+- **🛰️ High-Precision Tracking**: Uses browser Geolocation API with high-accuracy settings for precise movement.
+- **🗺️ Premium Dark Interface**: A sleek, glassmorphic UI built with Vanilla CSS and Leaflet.js, featuring CartoDB Dark Matter tiles.
+- **👥 Intelligent Multi-Session Support**: Refactored socket logic allows users to be logged in from multiple tabs or devices simultaneously without session clashing.
+- **⚡ Event-Driven Architecture**: Powered by Apache Kafka (KRaft mode) for professional-grade event streaming.
+- **💾 Batch Persistence**: Efficient MongoDB write-buffering via dedicated Kafka consumers.
+- **📱 Fully Responsive**: Optimized for both desktop and mobile devices with a custom sidebar for online users.
+
+---
+
+## 🛠️ Tech Stack
+
+- **Frontend**: HTML5, Vanilla CSS (Glassmorphism), JavaScript (ESM)
+- **Maps**: Leaflet.js, CartoDB Tiles
+- **Backend**: Node.js, Express
+- **Real-time**: Socket.IO 4.x
+- **Messaging**: Apache Kafka (kafkajs)
+- **Database**: MongoDB (Mongoose)
+- **Auth**: Passport.js, JWT (jsonwebtoken)
+- **Deployment**: Render (Backend), Vercel (Frontend), MongoDB Atlas, Confluent/Upstash Kafka
+
+---
+
+## 📐 Architecture
 
 ```mermaid
-flowchart LR
-    Browser -->|Google OAuth| Google[Google OAuth 2.0]
-    Browser -->|Geolocation + Socket.IO| Server[Express + Socket.IO]
-    Google -->|Session Cookie| Server
-    Server -->|Produce location event| Kafka[(Kafka: location-updates)]
-    Kafka -->|broadcast-group| Broadcast[Broadcast Consumer]
-    Kafka -->|db-processor-group| DBConsumer[DB Consumer]
-    Broadcast -->|io.emit location-update| Server
-    Server -->|live updates| Browser
-    DBConsumer -->|insert history + lastSeen| Mongo[(MongoDB)]
+flowchart TD
+    subgraph Client
+        Browser[User Browser]
+        Mobile[Mobile Device]
+    end
+
+    subgraph API_Layer
+        Express[Express Server]
+        SocketIO[Socket.IO Manager]
+    end
+
+    subgraph Event_Streaming
+        Kafka[(Kafka Topic: location-updates)]
+    end
+
+    subgraph Workers
+        Broadcaster[Broadcast Consumer]
+        DBWriter[DB Batch Consumer]
+    end
+
+    Client -->|JWT / Session| API_Layer
+    SocketIO -->|Produce Location| Kafka
+    Kafka -->|Stream| Broadcaster
+    Kafka -->|Batch| DBWriter
+    Broadcaster -->|Push Update| SocketIO
+    SocketIO -->|Real-time UI| Client
+    DBWriter -->|Bulk Insert| MongoDB[(MongoDB Atlas)]
 ```
 
-## Project Structure
+---
 
-```text
-Live Location Tracker/
-├── docker-compose.yml
-├── backend/
-│   ├── package.json
-│   ├── .env.example
-│   └── src/
-│       ├── server.js
-│       ├── config/
-│       ├── consumers/
-│       ├── models/
-│       ├── routes/
-│       └── socket/
-└── frontend/
-    ├── index.html
-    ├── css/style.css
-    └── js/
-        ├── app.js
-        ├── auth.js
-        ├── map.js
-        └── socket.js
-```
+## 🏁 Getting Started
 
-## Prerequisites
+### Prerequisites
+- Node.js 18+
+- Docker & Docker Compose (for local Kafka/Mongo)
+- Google Cloud Project with OAuth 2.0 Credentials
 
-- Node.js 18 or newer
-- Docker and Docker Compose
-- Google Cloud OAuth 2.0 credentials
+### Installation
 
-## Local Setup
+1. **Clone & Setup Infrastructure**:
+   ```bash
+   docker compose up -d
+   ```
 
-1. Start MongoDB and Kafka:
+2. **Install Backend Dependencies**:
+   ```bash
+   cd backend
+   npm install
+   ```
 
-```bash
-docker compose up -d
-```
+3. **Configure Environment**:
+   Create a `.env` file in the `backend` directory:
+   ```env
+   GOOGLE_CLIENT_ID=your_id
+   GOOGLE_CLIENT_SECRET=your_secret
+   SESSION_SECRET=your_random_secret
+   MONGODB_URI=mongodb://localhost:27018/location-tracker
+   KAFKA_BROKER=localhost:9092
+   PORT=3000
+   ```
 
-2. Install backend dependencies:
+4. **Run the App**:
+   ```bash
+   npm run dev
+   ```
 
-```bash
-cd backend
-npm install
-```
+---
 
-3. Create your environment file:
+## 🛠️ Troubleshooting
 
-```bash
-cp .env.example .env
-```
-
-4. Fill in `backend/.env` with your Google credentials:
-
-```env
-GOOGLE_CLIENT_ID=your_google_client_id_here
-GOOGLE_CLIENT_SECRET=your_google_client_secret_here
-SESSION_SECRET=replace_with_a_long_random_secret
-MONGODB_URI=mongodb://localhost:27018/location-tracker
-KAFKA_BROKER=localhost:9092
-PORT=3000
-```
-
-5. In Google Cloud Console, add this authorized redirect URI:
-
-```text
-http://localhost:3000/auth/google/callback
-```
-
-6. Start the app:
-
-```bash
-npm run dev
-```
-
-7. Open:
-
-```text
-http://localhost:3000
-```
-
-Do not open the app through Live Server on `localhost:5500`; auth and Socket.IO routes only exist on the Express server.
-
-## Environment Variables
-
-| Variable | Required | Description |
-| --- | --- | --- |
-| `GOOGLE_CLIENT_ID` | Yes | Google OAuth client ID |
-| `GOOGLE_CLIENT_SECRET` | Yes | Google OAuth client secret |
-| `SESSION_SECRET` | Yes | Secret used to sign session cookies |
-| `MONGODB_URI` | Yes | MongoDB connection string |
-| `KAFKA_BROKER` | Yes | Kafka broker address |
-| `PORT` | Yes | Express server port |
-| `CLIENT_URL` | No | Only needed if serving frontend from a separate origin |
-
-## Available Scripts
-
-Run these from `backend/`.
-
-```bash
-npm run dev     # start with Node watch mode
-npm start       # start normally
-```
-
-## Deployment
-
-This project is not a static-only app. It needs a Node server, WebSockets, MongoDB, Kafka, and HTTPS.
-
-Recommended managed setup:
-
-- Render for the Node/Express + Socket.IO app.
-- MongoDB Atlas for MongoDB.
-- Confluent Cloud for Kafka.
-
-For a simpler all-in-one deployment, use a VPS and run the app with Docker, plus a reverse proxy such as Caddy or Nginx for HTTPS.
-
-Important production notes:
-
-- Browser geolocation requires HTTPS outside `localhost`.
-- Update Google OAuth redirect URI to your production URL, for example:
-
-```text
-https://your-domain.com/auth/google/callback
-```
-
-- Set production environment variables in your hosting provider.
-- Use managed MongoDB/Kafka credentials instead of local Docker URLs.
-
-## Troubleshooting
-
-| Problem | Fix |
+| Issue | Potential Solution |
 | --- | --- |
-| `/auth/google` returns 404 | Open `http://localhost:3000`, not `localhost:5500` |
-| Socket status stays `Reconnecting...` | Check your internet connection or if the server is down. |
-| Socket status shows `Connection failed` | Authentication error. Try logging in again to refresh your session. |
-| Location does not show | Click `Share location` and allow browser permission |
-| Browser blocks geolocation after deploy | Use HTTPS |
-| Server fails on MongoDB | Check `MONGODB_URI` and ensure Docker/Atlas is reachable |
-| Server fails on Kafka | Check `KAFKA_BROKER` and ensure Kafka is healthy |
+| **"Connection failed"** | Your JWT or Session has expired. Try logging out and signing in with Google again. |
+| **"Reconnecting..."** | The backend server is unreachable. Check if the Node process or Render service is active. |
+| **Map is blank** | Ensure you have an active internet connection to load Leaflet tiles. |
+| **Location not moving** | Make sure you've clicked **"Share Location"** and granted browser permissions. |
+| **Kafka errors** | Ensure Docker is running or your Kafka broker address is correct. |
 
-## License
+---
 
-MIT
+## 📜 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+<p align="center">
+  Built with ❤️ for the Developer Cohort
+</p>
