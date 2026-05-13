@@ -74,11 +74,16 @@ const sessionMiddleware = session({
   },
 });
 
-// CORS is only needed when a separate frontend origin is configured.
+// Normalize CLIENT_URL (remove trailing slash for CORS compatibility)
+const CLIENT_URL = process.env.CLIENT_URL ? process.env.CLIENT_URL.replace(/\/$/, "") : null;
+
+// CORS configuration for cross-domain sessions
 if (CLIENT_URL) {
   app.use(cors({
     origin: CLIENT_URL,
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
   }));
 }
 
