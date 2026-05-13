@@ -24,7 +24,11 @@ const SocketManager = (() => {
     onConnectionChange = callbacks.onConnectionChange || (() => {});
     onError = callbacks.onError || (() => {});
 
-    socket = io({
+    const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+      ? 'http://localhost:3000'
+      : 'https://live-location-tracker-unpn.onrender.com';
+
+    socket = io(API_BASE, {
       withCredentials: true,
       transports: ['websocket', 'polling'],
       reconnection: true,

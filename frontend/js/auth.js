@@ -2,12 +2,17 @@
  * auth.js — Authentication UI logic
  */
 const AuthManager = (() => {
+  // Use Render backend URL in production, localhost in development
+  const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? 'http://localhost:3000'
+    : 'https://live-location-tracker-unpn.onrender.com';
+
   /**
    * Check if user is currently authenticated
    */
   const checkAuth = async () => {
     try {
-      const res = await fetch('/auth/me', { credentials: 'include' });
+      const res = await fetch(`${API_BASE}/auth/me`, { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         return data.success ? data.user : null;
@@ -23,7 +28,7 @@ const AuthManager = (() => {
    * Redirect to Google OAuth login
    */
   const login = () => {
-    window.location.href = '/auth/google';
+    window.location.href = `${API_BASE}/auth/google`;
   };
 
   /**
@@ -31,7 +36,7 @@ const AuthManager = (() => {
    */
   const logout = async () => {
     try {
-      window.location.href = '/auth/logout';
+      window.location.href = `${API_BASE}/auth/logout`;
     } catch (err) {
       console.error('Logout failed:', err);
     }
