@@ -69,8 +69,8 @@ const sessionMiddleware = session({
   cookie: {
     maxAge: 24 * 60 * 60 * 1000, // 1 day
     httpOnly: true,
-    secure: false, // Set to true in production with HTTPS
-    sameSite: 'lax',
+    secure: true, // Required for SameSite: 'none'
+    sameSite: 'none', // Required for cross-domain (Vercel -> Render)
   },
 });
 
