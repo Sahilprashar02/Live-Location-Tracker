@@ -1,7 +1,11 @@
+<p align="center">
+  <img src="frontend/assets/logo.png" alt="Live Location Tracker Logo" width="200">
+</p>
+
 <h1 align="center">Live Location Tracker</h1>
 
 <p align="center">
-  A real-time location sharing app with Google OAuth, Socket.IO, Kafka, MongoDB, and an interactive Leaflet map.
+  A premium, real-time location sharing application built with Node.js, Socket.IO, Kafka, and MongoDB.
 </p>
 
 <p align="center">
@@ -180,7 +184,8 @@ https://your-domain.com/auth/google/callback
 | Problem | Fix |
 | --- | --- |
 | `/auth/google` returns 404 | Open `http://localhost:3000`, not `localhost:5500` |
-| Socket status stays `Connecting...` | Make sure the backend is running and the page was loaded from port `3000` |
+| Socket status stays `Reconnecting...` | Check your internet connection or if the server is down. |
+| Socket status shows `Connection failed` | Authentication error. Try logging in again to refresh your session. |
 | Location does not show | Click `Share location` and allow browser permission |
 | Browser blocks geolocation after deploy | Use HTTPS |
 | Server fails on MongoDB | Check `MONGODB_URI` and ensure Docker/Atlas is reachable |

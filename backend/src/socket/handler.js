@@ -1,7 +1,7 @@
 const { v4: uuidv4 } = require('uuid');
 const { producer, TOPIC } = require('../config/kafka');
 
-// Track active users: userId -> { socketId, displayName, avatar, lastUpdate }
+// Track active users: socketId -> { userId, displayName, avatar, lastUpdate, lastLocationAt }
 const activeUsers = new Map();
 
 // Rate limiting: userId -> lastEmitTimestamp
@@ -59,24 +59,33 @@ const initSocketHandler = (io) => {
       lastLocationAt: null,
     };
 
-    // Track this user as active
-    activeUsers.set(userInfo.userId, userInfo);
+    // Check if this is the first socket for this user (to avoid redundant broadcasts)
+    const isFirstSocket = !Array.from(activeUsers.values()).some(u => u.userId === userInfo.userId);
 
-    console.log(`🟢 User connected: ${user.displayName} (${socket.id})`);
+    // Track this socket as active
+    activeUsers.set(socket.id, userInfo);
 
-    // Send current active users to the newly connected client
-    socket.emit('active-users', Array.from(activeUsers.values()).map((u) => ({
+    console.log(`🟢 User connected: ${user.displayName} (Socket: ${socket.id}, First: ${isFirstSocket})`);
+
+    // Send current active users to the newly connected client (deduplicated by userId)
+    const uniqueUsers = Array.from(new Map(
+      Array.from(activeUsers.values()).map(u => [u.userId, u])
+    ).values());
+
+    socket.emit('active-users', uniqueUsers.map((u) => ({
       userId: u.userId,
       displayName: u.displayName,
       avatar: u.avatar,
     })));
 
-    // Notify others about new user
-    socket.broadcast.emit('user-connected', {
-      userId: userInfo.userId,
-      displayName: userInfo.displayName,
-      avatar: userInfo.avatar,
-    });
+    // Notify others only if this is the user's first connection
+    if (isFirstSocket) {
+      socket.broadcast.emit('user-connected', {
+        userId: userInfo.userId,
+        displayName: userInfo.displayName,
+        avatar: userInfo.avatar,
+      });
+    }
 
     // Handle location updates
     socket.on('send-location', async (data) => {
@@ -98,7 +107,7 @@ const initSocketHandler = (io) => {
         // Update active user's last update time
         userInfo.lastUpdate = now;
         userInfo.lastLocationAt = now;
-        activeUsers.set(userInfo.userId, userInfo);
+        activeUsers.set(socket.id, userInfo);
 
         // Construct Kafka event
         const locationEvent = {
@@ -133,37 +142,47 @@ const initSocketHandler = (io) => {
 
     // Handle disconnect
     socket.on('disconnect', (reason) => {
-      console.log(`🔴 User disconnected: ${user.displayName} (${reason})`);
-      activeUsers.delete(userInfo.userId);
-      rateLimitMap.delete(userInfo.userId);
-
-      // Broadcast to all remaining clients
-      io.emit('user-disconnected', {
-        userId: userInfo.userId,
-      });
+      console.log(`🔴 Socket disconnected: ${user.displayName} (${socket.id}) - ${reason}`);
+      
+      // Remove only this specific socket
+      activeUsers.delete(socket.id);
+      
+      // Check if the user has any other active sockets
+      const hasOtherSockets = Array.from(activeUsers.values()).some(u => u.userId === userInfo.userId);
+      
+      if (!hasOtherSockets) {
+        rateLimitMap.delete(userInfo.userId);
+        // Only broadcast disconnected if NO sockets remain for this user
+        io.emit('user-disconnected', {
+          userId: userInfo.userId,
+          displayName: userInfo.displayName
+        });
+      }
     });
   });
 
-  // Periodic cleanup of stale users (no update in 30 seconds)
+  // Periodic cleanup of stale sockets (no update in 30 seconds)
   setInterval(() => {
     const now = Date.now();
     const STALE_THRESHOLD = 30000; // 30 seconds
 
-    for (const [userId, info] of activeUsers.entries()) {
+    for (const [socketId, info] of activeUsers.entries()) {
       if (info.lastLocationAt && now - info.lastLocationAt > STALE_THRESHOLD) {
-        console.log(`🧹 Removing stale user: ${info.displayName}`);
-        activeUsers.delete(userId);
-        rateLimitMap.delete(userId);
-        io.emit('user-disconnected', { userId });
+        console.log(`🧹 Removing stale socket for user: ${info.displayName} (${socketId})`);
+        
+        activeUsers.delete(socketId);
+        
+        // Disconnect the specific stale socket
+        const staleSocket = io.sockets.sockets.get(socketId);
+        if (staleSocket) {
+          staleSocket.disconnect(true);
+        }
 
-        // Find and disconnect the stale socket
-        const staleSockets = io.sockets.sockets;
-        for (const [, s] of staleSockets) {
-          const sUserId = s.request?.user?._id?.toString() || 
-                          s.request?.session?.passport?.user?.toString();
-          if (sUserId === userId) {
-            s.disconnect(true);
-          }
+        // Check if user still has other active sockets
+        const hasOtherSockets = Array.from(activeUsers.values()).some(u => u.userId === info.userId);
+        if (!hasOtherSockets) {
+          rateLimitMap.delete(info.userId);
+          io.emit('user-disconnected', { userId: info.userId });
         }
       }
     }
