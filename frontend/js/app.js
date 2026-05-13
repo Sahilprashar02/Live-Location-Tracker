@@ -212,7 +212,7 @@ import { MapManager } from './map.js';
       updateUsersList();
     },
 
-    onConnectionChange: (connected) => {
+    onConnectionChange: (connected, status) => {
       if (connected) {
         statusDot.className = 'status-dot connected';
         statusText.textContent = 'Connected';
@@ -229,7 +229,7 @@ import { MapManager } from './map.js';
         }
       } else {
         statusDot.className = 'status-dot disconnected';
-        statusText.textContent = 'Reconnecting...';
+        statusText.textContent = status === 'failed' ? 'Connection failed' : 'Reconnecting...';
       }
     },
 

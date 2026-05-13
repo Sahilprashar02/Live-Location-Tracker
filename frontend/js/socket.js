@@ -54,7 +54,7 @@ export const SocketManager = (() => {
 
     socket.on('connect_error', (err) => {
       isConnected = false;
-      onConnectionChange(false);
+      onConnectionChange(false, 'failed');
       console.error('❌ Socket connection error:', err.message);
       onError('Connection failed. Please try logging in again.');
     });

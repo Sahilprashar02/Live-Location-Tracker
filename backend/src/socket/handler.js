@@ -29,19 +29,11 @@ const validateLocationData = (data) => {
  * Auth is enforced: only users with valid sessions can connect.
  */
 const initSocketHandler = (io) => {
-  // Auth middleware — reject unauthenticated socket connections
-  io.use((socket, next) => {
-    const user = socket.request.session?.passport?.user;
-    if (user) {
-      next();
-    } else {
-      next(new Error('Authentication required'));
-    }
-  });
 
   io.on('connection', async (socket) => {
-    const session = socket.request.session;
-    const userId = session?.passport?.user;
+    // Derive userId from JWT user (set in server.js) or session user
+    const userId = socket.request.user?._id?.toString() || 
+                   socket.request.session?.passport?.user?.toString();
 
     if (!userId) {
       socket.disconnect(true);
@@ -167,7 +159,9 @@ const initSocketHandler = (io) => {
         // Find and disconnect the stale socket
         const staleSockets = io.sockets.sockets;
         for (const [, s] of staleSockets) {
-          if (s.request?.session?.passport?.user?.toString() === userId) {
+          const sUserId = s.request?.user?._id?.toString() || 
+                          s.request?.session?.passport?.user?.toString();
+          if (sUserId === userId) {
             s.disconnect(true);
           }
         }
