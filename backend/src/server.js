@@ -54,6 +54,9 @@ const authRoutes = require('./routes/auth');
 const app = express();
 const server = http.createServer(app);
 
+// Trust Render's proxy to ensure correct protocol (https) in OAuth redirects
+app.set('trust proxy', 1);
+
 // Session middleware (shared between Express and Socket.IO)
 const sessionMiddleware = session({
   secret: process.env.SESSION_SECRET,
