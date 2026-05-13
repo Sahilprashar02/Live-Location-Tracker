@@ -2,10 +2,46 @@ const { Kafka } = require('kafkajs');
 
 const TOPIC = 'location-updates';
 
+const normalizeCertificate = (value) => {
+  if (!value) return undefined;
+  return value.replace(/\\n/g, '\n');
+};
+
+const getKafkaConnectionOptions = () => {
+  const ca = normalizeCertificate(process.env.KAFKA_CA_CERT);
+  const cert = normalizeCertificate(process.env.KAFKA_ACCESS_CERT);
+  const key = normalizeCertificate(process.env.KAFKA_ACCESS_KEY);
+
+  if (ca && cert && key) {
+    return {
+      ssl: {
+        ca: [ca],
+        cert,
+        key,
+        rejectUnauthorized: true,
+      },
+    };
+  }
+
+  if (process.env.KAFKA_USERNAME && process.env.KAFKA_PASSWORD) {
+    return {
+      ssl: true,
+      sasl: {
+        mechanism: 'plain',
+        username: process.env.KAFKA_USERNAME,
+        password: process.env.KAFKA_PASSWORD,
+      },
+    };
+  }
+
+  return {};
+};
+
 // Create Kafka client
 const kafka = new Kafka({
   clientId: 'location-tracker',
   brokers: [process.env.KAFKA_BROKER || 'localhost:9092'],
+  ...getKafkaConnectionOptions(),
   retry: {
     initialRetryTime: 1000,
     retries: 10,
