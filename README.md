@@ -1,113 +1,191 @@
-# Live Location Tracker
+<h1 align="center">Live Location Tracker</h1>
 
-Authenticated users share live browser geolocation through Socket.IO. The backend publishes every valid location event to Kafka, a socket consumer broadcasts those events to connected users, and a separate database processor consumes the same topic to store location history as JSONL.
+<p align="center">
+  A real-time location sharing app with Google OAuth, Socket.IO, Kafka, MongoDB, and an interactive Leaflet map.
+</p>
 
-## Tech Stack
+<p align="center">
+  <img alt="Node.js" src="https://img.shields.io/badge/Node.js-18%2B-339933?style=for-the-badge&logo=node.js&logoColor=white">
+  <img alt="Express" src="https://img.shields.io/badge/Express-4-000000?style=for-the-badge&logo=express&logoColor=white">
+  <img alt="Socket.IO" src="https://img.shields.io/badge/Socket.IO-4-010101?style=for-the-badge&logo=socketdotio&logoColor=white">
+  <img alt="Kafka" src="https://img.shields.io/badge/Apache_Kafka-KRaft-231F20?style=for-the-badge&logo=apachekafka&logoColor=white">
+  <img alt="MongoDB" src="https://img.shields.io/badge/MongoDB-7-47A248?style=for-the-badge&logo=mongodb&logoColor=white">
+  <img alt="Docker" src="https://img.shields.io/badge/Docker_Compose-ready-2496ED?style=for-the-badge&logo=docker&logoColor=white">
+  <img alt="License" src="https://img.shields.io/badge/License-MIT-blue?style=for-the-badge">
+</p>
 
-- React + Vite
-- Leaflet + React Leaflet
-- Node.js + Express
-- Socket.IO
-- KafkaJS + Kafka
-- OIDC / OAuth 2.0 Authorization Code flow
+## Overview
 
-## Setup
+Live Location Tracker lets authenticated users share their browser GPS position and see everyone move live on a dark interactive map. Location events are published to Kafka, then consumed independently for real-time broadcasting and MongoDB persistence.
+
+The app runs as a single-origin Express server at `http://localhost:3000`: Express serves the frontend, handles Google OAuth sessions, exposes Socket.IO, and starts the Kafka consumers.
+
+## Features
+
+- Google OAuth 2.0 login with Passport.js.
+- Session storage in MongoDB using `connect-mongo`.
+- Real-time browser updates with Socket.IO.
+- Kafka topic `location-updates` for durable event flow.
+- Separate Kafka consumer groups for broadcasting and database writes.
+- MongoDB location history with user `lastSeen` updates.
+- Leaflet + CartoDB Dark Matter map tiles.
+- Share location button, live marker updates, user sidebar, and responsive UI.
+- Local Docker Compose for Kafka in KRaft mode and MongoDB.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    Browser -->|Google OAuth| Google[Google OAuth 2.0]
+    Browser -->|Geolocation + Socket.IO| Server[Express + Socket.IO]
+    Google -->|Session Cookie| Server
+    Server -->|Produce location event| Kafka[(Kafka: location-updates)]
+    Kafka -->|broadcast-group| Broadcast[Broadcast Consumer]
+    Kafka -->|db-processor-group| DBConsumer[DB Consumer]
+    Broadcast -->|io.emit location-update| Server
+    Server -->|live updates| Browser
+    DBConsumer -->|insert history + lastSeen| Mongo[(MongoDB)]
+```
+
+## Project Structure
+
+```text
+Live Location Tracker/
+├── docker-compose.yml
+├── backend/
+│   ├── package.json
+│   ├── .env.example
+│   └── src/
+│       ├── server.js
+│       ├── config/
+│       ├── consumers/
+│       ├── models/
+│       ├── routes/
+│       └── socket/
+└── frontend/
+    ├── index.html
+    ├── css/style.css
+    └── js/
+        ├── app.js
+        ├── auth.js
+        ├── map.js
+        └── socket.js
+```
+
+## Prerequisites
+
+- Node.js 18 or newer
+- Docker and Docker Compose
+- Google Cloud OAuth 2.0 credentials
+
+## Local Setup
+
+1. Start MongoDB and Kafka:
+
+```bash
+docker compose up -d
+```
+
+2. Install backend dependencies:
+
+```bash
+cd backend
+npm install
+```
+
+3. Create your environment file:
 
 ```bash
 cp .env.example .env
-npm install
-docker compose up -d kafka
+```
+
+4. Fill in `backend/.env` with your Google credentials:
+
+```env
+GOOGLE_CLIENT_ID=your_google_client_id_here
+GOOGLE_CLIENT_SECRET=your_google_client_secret_here
+SESSION_SECRET=replace_with_a_long_random_secret
+MONGODB_URI=mongodb://localhost:27018/location-tracker
+KAFKA_BROKER=localhost:9092
+PORT=3000
+```
+
+5. In Google Cloud Console, add this authorized redirect URI:
+
+```text
+http://localhost:3000/auth/google/callback
+```
+
+6. Start the app:
+
+```bash
 npm run dev
 ```
 
-The default dev command uses ports that avoid common conflicts on this machine:
+7. Open:
 
-- Backend: `http://localhost:4010`
-- Frontend: `http://localhost:5174`
-
-Open `http://localhost:5174` in your browser.
-
-If you specifically want the original ports `4000` and `5173`, use:
-
-```bash
-npm run dev:default
+```text
+http://localhost:3000
 ```
 
-In another terminal, run the database processor:
-
-```bash
-npm run db-processor
-```
-
-Open `http://localhost:5173`.
+Do not open the app through Live Server on `localhost:5500`; auth and Socket.IO routes only exist on the Express server.
 
 ## Environment Variables
 
-See `.env.example`. For local development, `DEMO_AUTH=true` provides a demo login so the socket/auth/map/Kafka flow can be tested without creating an external OIDC app. For a real OIDC provider, set `DEMO_AUTH=false` and configure:
+| Variable | Required | Description |
+| --- | --- | --- |
+| `GOOGLE_CLIENT_ID` | Yes | Google OAuth client ID |
+| `GOOGLE_CLIENT_SECRET` | Yes | Google OAuth client secret |
+| `SESSION_SECRET` | Yes | Secret used to sign session cookies |
+| `MONGODB_URI` | Yes | MongoDB connection string |
+| `KAFKA_BROKER` | Yes | Kafka broker address |
+| `PORT` | Yes | Express server port |
+| `CLIENT_URL` | No | Only needed if serving frontend from a separate origin |
 
-- `OIDC_ISSUER_URL`
-- `OIDC_CLIENT_ID`
-- `OIDC_CLIENT_SECRET`
-- `OIDC_REDIRECT_URI`
-- `OIDC_SCOPES`
+## Available Scripts
 
-The OIDC app callback URL should be `http://localhost:4000/auth/callback` in local development.
-
-## OIDC Auth Setup
-
-1. Create an OAuth/OIDC application in Auth0, Okta, Keycloak, or another provider.
-2. Enable Authorization Code flow.
-3. Add `http://localhost:4000/auth/callback` as an allowed callback URL.
-4. Add `http://localhost:5173` and `http://localhost:4000` as allowed origins where required.
-5. Copy the issuer discovery URL and client credentials into `.env`.
-
-The backend stores the logged-in user in the server session. Socket.IO reuses that same session, so location events are tied to `user.id`, not only to a socket id.
-
-## Socket Event Flow
-
-1. User logs in.
-2. Browser asks for location permission.
-3. Client emits `location:update` every `VITE_LOCATION_INTERVAL_MS`.
-4. Server validates latitude, longitude, accuracy, timestamp, and event id.
-5. Server rejects unauthenticated, invalid, stale, or duplicate events.
-6. Server publishes the event to Kafka.
-
-## Kafka Event Flow
-
-Topic: `location-updates`
-
-- Producer: Socket server publishes valid location updates.
-- Consumer group `socket-broadcaster`: receives Kafka events and broadcasts `location:updated` to connected browsers.
-- Consumer group `location-history-writer`: receives the same events independently and stores/simulates location history.
-
-Kafka is intentionally in the live path. This mirrors rider/customer tracking systems where high-frequency movement events are streamed first, then independent consumers update sockets, analytics, alerting, and persistence without making the socket handler do every job synchronously.
-
-## Database Processor
-
-Run:
+Run these from `backend/`.
 
 ```bash
-npm run db-processor
+npm run dev     # start with Node watch mode
+npm start       # start normally
 ```
 
-It writes newline-delimited JSON to `server/data/location-history.jsonl`. In production, this process would batch writes to Postgres, TimescaleDB, Cassandra, ClickHouse, or object storage. Writing directly to a database on every socket event can become expensive because location streams are bursty and high-volume; batching and consumer groups keep the socket server responsive.
+## Deployment
 
-## Demo Video Link
+This project is not a static-only app. It needs a Node server, WebSockets, MongoDB, Kafka, and HTTPS.
 
-Add your YouTube unlisted demo link here before submission:
+Recommended managed setup:
 
-`https://youtube.com/watch?v=YOUR_VIDEO_ID`
+- Render for the Node/Express + Socket.IO app.
+- MongoDB Atlas for MongoDB.
+- Confluent Cloud for Kafka.
 
-## Submission Links
+For a simpler all-in-one deployment, use a VPS and run the app with Docker, plus a reverse proxy such as Caddy or Nginx for HTTPS.
 
-- Public GitHub repository: add link here
-- Live deployed link: optional
-- YouTube unlisted demo: add link here
+Important production notes:
 
-## Assumptions And Limitations
+- Browser geolocation requires HTTPS outside `localhost`.
+- Update Google OAuth redirect URI to your production URL, for example:
 
-- Demo auth is available for local testing, but real submission should explain the configured OIDC provider.
-- Browser geolocation requires HTTPS in production or localhost in development.
-- Location history is stored as JSONL for a simple demo; production storage should use batching, retention policies, and geospatial indexes.
-- Stale users are removed from maps after `STALE_USER_MS`.
-- Duplicate event ids are ignored in memory; production dedupe should use a bounded cache such as Redis.
+```text
+https://your-domain.com/auth/google/callback
+```
+
+- Set production environment variables in your hosting provider.
+- Use managed MongoDB/Kafka credentials instead of local Docker URLs.
+
+## Troubleshooting
+
+| Problem | Fix |
+| --- | --- |
+| `/auth/google` returns 404 | Open `http://localhost:3000`, not `localhost:5500` |
+| Socket status stays `Connecting...` | Make sure the backend is running and the page was loaded from port `3000` |
+| Location does not show | Click `Share location` and allow browser permission |
+| Browser blocks geolocation after deploy | Use HTTPS |
+| Server fails on MongoDB | Check `MONGODB_URI` and ensure Docker/Atlas is reachable |
+| Server fails on Kafka | Check `KAFKA_BROKER` and ensure Kafka is healthy |
+
+## License
+
+MIT

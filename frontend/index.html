@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Real-time live location tracker with interactive map. Share your location and see others moving in real-time.">
+  <title>Live Location Tracker</title>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+
+  <!-- App CSS -->
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- ========== LOGIN SCREEN ========== -->
+  <div id="login-screen" class="screen active">
+    <div class="gradient-bg">
+      <div class="gradient-orb orb-1"></div>
+      <div class="gradient-orb orb-2"></div>
+      <div class="gradient-orb orb-3"></div>
+    </div>
+
+    <div class="login-container">
+      <div class="login-card glass-card">
+        <div class="login-icon">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="url(#grad1)"/>
+            <circle cx="12" cy="9" r="2.5" fill="#0a0a1a"/>
+            <defs>
+              <linearGradient id="grad1" x1="5" y1="2" x2="19" y2="22">
+                <stop offset="0%" stop-color="#00d2ff"/>
+                <stop offset="100%" stop-color="#7a2bff"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <h1 class="login-title">Live Location Tracker</h1>
+        <p class="login-subtitle">Share your location in real-time and see others moving on the map</p>
+
+        <button id="btn-google-login" class="btn-login">
+          <svg class="google-icon" viewBox="0 0 24 24">
+            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
+            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+          </svg>
+          <span>Sign in with Google</span>
+        </button>
+
+        <div class="login-features">
+          <div class="feature-item">
+            <div class="feature-icon">📍</div>
+            <span>Real-time tracking</span>
+          </div>
+          <div class="feature-item">
+            <div class="feature-icon">🔒</div>
+            <span>Secure & private</span>
+          </div>
+          <div class="feature-item">
+            <div class="feature-icon">⚡</div>
+            <span>Powered by Kafka</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== MAP SCREEN ========== -->
+  <div id="map-screen" class="screen">
+    <!-- Map Container -->
+    <div id="map"></div>
+
+    <!-- Status Bar -->
+    <div id="status-bar" class="glass-panel">
+      <div class="status-left">
+        <div id="connection-status" class="status-dot disconnected"></div>
+        <span id="status-text">Connecting...</span>
+      </div>
+      <div class="status-right">
+        <span id="online-count">0 online</span>
+      </div>
+    </div>
+
+    <!-- User Panel -->
+    <div id="user-panel" class="glass-panel">
+      <div class="user-info">
+        <img id="user-avatar" class="user-avatar" src="" alt="avatar">
+        <div class="user-details">
+          <span id="user-name" class="user-name">User</span>
+          <span id="user-coords" class="user-coords">Waiting for location...</span>
+        </div>
+      </div>
+      <button id="btn-share-location" class="btn-share-location" type="button" title="Share location">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 21s7-7.33 7-12A7 7 0 105 9c0 4.67 7 12 7 12z"/>
+          <circle cx="12" cy="9" r="2.5"/>
+        </svg>
+        <span>Share location</span>
+      </button>
+      <button id="btn-logout" class="btn-icon" title="Logout">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/>
+          <polyline points="16,17 21,12 16,7"/>
+          <line x1="21" y1="12" x2="9" y2="12"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Online Users Sidebar -->
+    <div id="users-sidebar" class="glass-panel">
+      <div class="sidebar-header">
+        <h3>Online Users</h3>
+        <button id="btn-toggle-sidebar" class="btn-icon btn-small" title="Toggle sidebar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="15,18 9,12 15,6"/>
+          </svg>
+        </button>
+      </div>
+      <div id="users-list" class="users-list">
+        <div class="empty-state">
+          <span class="empty-icon">👥</span>
+          <p>No other users online</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mobile Toggle Button -->
+    <button id="btn-mobile-sidebar" class="btn-mobile-toggle glass-panel" title="Online users">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2"/>
+        <circle cx="9" cy="7" r="4"/>
+        <path d="M23 21v-2a4 4 0 00-3-3.87"/>
+        <path d="M16 3.13a4 4 0 010 7.75"/>
+      </svg>
+      <span id="mobile-badge" class="mobile-badge">0</span>
+    </button>
+
+    <!-- Location Permission Prompt -->
+    <div id="location-prompt" class="glass-panel location-prompt" style="display: none;">
+      <div class="prompt-icon">📍</div>
+      <h3>Location Permission Required</h3>
+      <p>Allow location access to share your position on the map</p>
+      <button id="btn-allow-location" class="btn-primary">Allow Location</button>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div id="toast-container"></div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+
+  <!-- Socket.IO Client (from backend server) -->
+  <script src="/socket.io/socket.io.js"></script>
+
+  <!-- App JS -->
+  <script src="js/map.js"></script>
+  <script src="js/socket.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
