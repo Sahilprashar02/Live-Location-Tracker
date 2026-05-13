@@ -2,6 +2,10 @@
  * app.js — Main application entry point
  * Orchestrates auth, map, socket, and geolocation
  */
+import { AuthManager } from './auth.js';
+import { SocketManager } from './socket.js';
+import { MapManager } from './map.js';
+
 (() => {
   if (window.location.hostname === 'localhost' && window.location.port === '5500') {
     window.location.replace(`http://localhost:3000${window.location.pathname}${window.location.search}${window.location.hash}`);

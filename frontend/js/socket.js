@@ -1,7 +1,7 @@
 /**
  * socket.js — Socket.IO client connection and event handling
  */
-const SocketManager = (() => {
+export const SocketManager = (() => {
   let socket = null;
   let isConnected = false;
 

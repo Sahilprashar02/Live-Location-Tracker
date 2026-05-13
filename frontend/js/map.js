@@ -1,7 +1,7 @@
 /**
  * map.js — Leaflet map initialization and marker management
  */
-const MapManager = (() => {
+export const MapManager = (() => {
   let map = null;
   const markers = {};
   let currentUserId = null;

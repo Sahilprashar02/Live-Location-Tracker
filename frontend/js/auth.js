@@ -1,7 +1,7 @@
 /**
  * auth.js — Authentication UI logic
  */
-const AuthManager = (() => {
+export const AuthManager = (() => {
   // Use Render backend URL in production, localhost in development
   const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
     ? 'http://localhost:3000'
