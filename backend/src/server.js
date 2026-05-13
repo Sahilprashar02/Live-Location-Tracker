@@ -126,28 +126,44 @@ io.engine.use(sessionMiddleware);
  */
 const bootstrap = async () => {
   try {
-    // 1. Connect to MongoDB
+    // 1. Connect to MongoDB (Required for sessions)
     await connectDB();
 
-    // 2. Initialize Kafka
-    await initKafka();
-
-    // 3. Start consumers
-    await startBroadcastConsumer(io);
-    await startDBConsumer();
-
-    // 4. Initialize Socket.IO handler
-    initSocketHandler(io);
-
-    // 5. Start server
+    // 2. Start server immediately
+    // This ensures Render detects an open port quickly, preventing deployment timeouts.
     server.listen(PORT, () => {
       console.log(`\n🚀 Server running at http://localhost:${PORT}`);
       console.log(`📡 Socket.IO ready`);
       console.log(`🔐 Auth: http://localhost:${PORT}/auth/google`);
       console.log(`💚 Health: http://localhost:${PORT}/health\n`);
     });
+
+    // 3. Initialize Kafka in the background
+    // If Kafka fails to connect (e.g., local broker not running on Render), 
+    // the server remains active to respond to health checks.
+    console.log('⏳ Initializing Kafka services...');
+    initKafka()
+      .then(async () => {
+        // Start consumers after Kafka is ready
+        await startBroadcastConsumer(io);
+        await startDBConsumer();
+
+        // Initialize Socket.IO handler
+        initSocketHandler(io);
+        
+        console.log('✅ Kafka and Socket services fully initialized');
+      })
+      .catch((error) => {
+        console.error('❌ Kafka initialization failed:', error.message);
+        console.log('⚠️ The app is running but real-time tracking via Kafka is unavailable.');
+        
+        // Still initialize basic socket handler so the app doesn't crash
+        initSocketHandler(io);
+      });
+
   } catch (error) {
     console.error('❌ Failed to bootstrap:', error);
+    // Exit if core dependencies (DB) fail
     process.exit(1);
   }
 };

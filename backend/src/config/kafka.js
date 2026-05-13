@@ -74,7 +74,7 @@ const ensureTopic = async () => {
         topics: [
           {
             topic: TOPIC,
-            numPartitions: 3,
+            numPartitions: 1, // Use 1 partition for cloud provider compatibility
             replicationFactor: 1,
           },
         ],
