@@ -2,10 +2,8 @@
  * auth.js — Authentication UI logic
  */
 export const AuthManager = (() => {
-  // Use Render backend URL in production, localhost in development
-  const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-    ? 'http://localhost:3000'
-    : 'https://live-location-tracker-unpn.onrender.com';
+  // Use environment variable. Default to localhost for development.
+  const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3000';
 
   /**
    * Check if user is currently authenticated

@@ -24,9 +24,7 @@ export const SocketManager = (() => {
     onConnectionChange = callbacks.onConnectionChange || (() => {});
     onError = callbacks.onError || (() => {});
 
-    const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-      ? 'http://localhost:3000'
-      : 'https://live-location-tracker-unpn.onrender.com';
+    const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3000';
 
     const token = localStorage.getItem('auth_token');
 
@@ -44,13 +42,11 @@ export const SocketManager = (() => {
     socket.on('connect', () => {
       isConnected = true;
       onConnectionChange(true);
-      console.log('🟢 Socket connected:', socket.id);
     });
 
     socket.on('disconnect', (reason) => {
       isConnected = false;
       onConnectionChange(false);
-      console.log('🔴 Socket disconnected:', reason);
     });
 
     socket.on('connect_error', (err) => {

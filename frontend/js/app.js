@@ -144,7 +144,6 @@ import { MapManager } from './map.js';
         }
       },
       (error) => {
-        console.error('Geolocation error:', error);
         switch (error.code) {
           case error.PERMISSION_DENIED:
             showToast('Location permission denied. Please enable it in your browser settings.', 'error');
