@@ -11,8 +11,27 @@ export const AuthManager = (() => {
    * Check if user is currently authenticated
    */
   const checkAuth = async () => {
+    // 1. Handle token from URL (if just redirected back from login)
+    const urlParams = new URLSearchParams(window.location.search);
+    const tokenFromUrl = urlParams.get('token');
+    if (tokenFromUrl) {
+      localStorage.setItem('auth_token', tokenFromUrl);
+      // Clean up the URL (remove token from address bar)
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
+    // 2. Prepare request with token if available
+    const token = localStorage.getItem('auth_token');
+    const headers = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
     try {
-      const res = await fetch(`${API_BASE}/auth/me`, { credentials: 'include' });
+      const res = await fetch(`${API_BASE}/auth/me`, { 
+        credentials: 'include',
+        headers
+      });
       if (res.ok) {
         const data = await res.json();
         return data.success ? data.user : null;
@@ -36,6 +55,7 @@ export const AuthManager = (() => {
    */
   const logout = async () => {
     try {
+      localStorage.removeItem('auth_token');
       window.location.href = `${API_BASE}/auth/logout`;
     } catch (err) {
       console.error('Logout failed:', err);

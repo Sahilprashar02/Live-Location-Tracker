@@ -28,7 +28,10 @@ export const SocketManager = (() => {
       ? 'http://localhost:3000'
       : 'https://live-location-tracker-unpn.onrender.com';
 
+    const token = localStorage.getItem('auth_token');
+
     socket = io(API_BASE, {
+      auth: { token },
       withCredentials: true,
       transports: ['websocket', 'polling'],
       reconnection: true,

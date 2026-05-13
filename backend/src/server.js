@@ -8,8 +8,10 @@ const MongoStore = require('connect-mongo');
 const cors = require('cors');
 const path = require('path');
 const mongoose = require('mongoose');
+const jwt = require('jsonwebtoken');
 
-// Config imports
+// Model and Config imports
+const User = require('./models/User');
 const connectDB = require('./config/db');
 const { initKafka, disconnectKafka } = require('./config/kafka');
 
@@ -21,7 +23,6 @@ const { startDBConsumer, stopDBConsumer } = require('./consumers/dbConsumer');
 const { initSocketHandler } = require('./socket/handler');
 
 const PORT = process.env.PORT || 3000;
-const CLIENT_URL = process.env.CLIENT_URL;
 const FRONTEND_PATH = path.join(__dirname, '..', '..', 'frontend');
 
 const validateEnv = () => {
@@ -121,57 +122,68 @@ const io = new Server(server, {
   pingInterval: 10000,
 });
 
-// Share session middleware with Socket.IO
-io.engine.use(sessionMiddleware);
+// Socket.IO middleware for authentication (Supports both Session and JWT)
+io.use(async (socket, next) => {
+  try {
+    // 1. Check for JWT token (Preferred for Vercel/Incognito)
+    const token = socket.handshake.auth.token;
+    if (token) {
+      try {
+        const decoded = jwt.verify(token, process.env.SESSION_SECRET);
+        const user = await User.findById(decoded.id);
+        if (user) {
+          socket.request.user = user;
+          return next();
+        }
+      } catch (err) {
+        console.warn('Socket JWT verify failed, falling back to session');
+      }
+    }
+
+    // 2. Fallback to session (For local dev or browsers that allow cookies)
+    sessionMiddleware(socket.request, {}, (err) => {
+      if (err) return next(err);
+      if (socket.request.user) {
+        return next();
+      }
+      next(new Error('Unauthorized'));
+    });
+  } catch (error) {
+    next(new Error('Authentication error'));
+  }
+});
 
 /**
- * Bootstrap the entire application:
- * 1. Connect to MongoDB
- * 2. Initialize Kafka producer + ensure topic
- * 3. Start Kafka consumers (broadcast + DB)
- * 4. Initialize Socket.IO handler
- * 5. Start HTTP server
+ * Bootstrap the entire application
  */
 const bootstrap = async () => {
   try {
-    // 1. Connect to MongoDB (Required for sessions)
+    // 1. Connect to MongoDB
     await connectDB();
 
-    // 2. Start server immediately
-    // This ensures Render detects an open port quickly, preventing deployment timeouts.
+    // 2. Start server immediately for Render health checks
     server.listen(PORT, () => {
-      console.log(`\n🚀 Server running at http://localhost:${PORT}`);
-      console.log(`📡 Socket.IO ready`);
-      console.log(`🔐 Auth: http://localhost:${PORT}/auth/google`);
-      console.log(`💚 Health: http://localhost:${PORT}/health\n`);
+      console.log(`\n🚀 Server running on port ${PORT}`);
+      console.log(`📡 Socket.IO ready with JWT support`);
     });
 
     // 3. Initialize Kafka in the background
-    // If Kafka fails to connect (e.g., local broker not running on Render), 
-    // the server remains active to respond to health checks.
     console.log('⏳ Initializing Kafka services...');
     initKafka()
       .then(async () => {
-        // Start consumers after Kafka is ready
         await startBroadcastConsumer(io);
         await startDBConsumer();
-
-        // Initialize Socket.IO handler
         initSocketHandler(io);
-        
         console.log('✅ Kafka and Socket services fully initialized');
       })
       .catch((error) => {
         console.error('❌ Kafka initialization failed:', error.message);
-        console.log('⚠️ The app is running but real-time tracking via Kafka is unavailable.');
-        
-        // Still initialize basic socket handler so the app doesn't crash
+        // Fallback: still initialize socket handler so basic connectivity works
         initSocketHandler(io);
       });
 
   } catch (error) {
     console.error('❌ Failed to bootstrap:', error);
-    // Exit if core dependencies (DB) fail
     process.exit(1);
   }
 };
@@ -179,18 +191,13 @@ const bootstrap = async () => {
 // Graceful shutdown
 const gracefulShutdown = async (signal) => {
   console.log(`\n${signal} received. Shutting down gracefully...`);
-
   try {
     await stopBroadcastConsumer();
     await stopDBConsumer();
     await disconnectKafka();
     await mongoose.connection.close();
-    server.close(() => {
-      process.exit(0);
-    });
-    setTimeout(() => process.exit(0), 5000).unref();
+    server.close(() => process.exit(0));
   } catch (error) {
-    console.error('Error during shutdown:', error);
     process.exit(1);
   }
 };
@@ -198,5 +205,4 @@ const gracefulShutdown = async (signal) => {
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
-// Start the application
 bootstrap();
