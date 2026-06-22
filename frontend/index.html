@@ -118,6 +118,32 @@
           </svg>
         </button>
       </div>
+      <!-- Explore POI Pills -->
+      <div id="explore-pills" class="explore-pills">
+        <button class="explore-btn" data-poi="fuel" title="Find petrol pumps">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 22V2h10c1.1 0 2 .9 2 2v10c0 1.1-.9 2-2 2h-2v4"/>
+            <path d="M15 6h4a2 2 0 012 2v8a2 2 0 01-2 2h-4"/>
+            <circle cx="9" cy="9" r="2"/>
+          </svg>
+          <span>Petrol</span>
+        </button>
+        <button class="explore-btn" data-poi="hospital" title="Find hospitals and clinics">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+          </svg>
+          <span>Hospitals</span>
+        </button>
+        <button class="explore-btn" data-poi="restaurant" title="Find restaurants and cafes">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17 8h1a4 4 0 110 8h-1M3 8h14v9a4 4 0 01-4 4H7a4 4 0 01-4-4Z"/>
+            <line x1="6" y1="2" x2="6" y2="4"/>
+            <line x1="10" y1="2" x2="10" y2="4"/>
+            <line x1="14" y1="2" x2="14" y2="4"/>
+          </svg>
+          <span>Food</span>
+        </button>
+      </div>
       <div id="search-results" class="search-results glass-panel"></div>
     </div>
 
@@ -144,7 +170,10 @@
       <div class="user-info">
         <img id="user-avatar" class="user-avatar" src="" alt="avatar">
         <div class="user-details">
-          <span id="user-name" class="user-name">User</span>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span id="user-name" class="user-name">User</span>
+            <span id="user-weather" class="user-weather" title="Local weather" style="display: none;"></span>
+          </div>
           <span id="user-coords" class="user-coords">Waiting for location...</span>
         </div>
       </div>

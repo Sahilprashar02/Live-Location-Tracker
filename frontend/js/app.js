@@ -43,6 +43,8 @@ import { GeofencingManager } from './geofencing.js';
   let lastSentTime = 0;
   let latestLocation = null;
   const SEND_INTERVAL = 5000; // Send location every 5 seconds
+  let lastWeatherFetchTime = 0;
+  const WEATHER_CACHE_MS = 5 * 60 * 1000; // 5 minutes cache
 
   // ========== TOAST NOTIFICATIONS ==========
   const showToast = (message, type = 'info') => {
@@ -114,6 +116,45 @@ import { GeofencingManager } from './geofencing.js';
     if (label) label.textContent = 'Sharing';
   };
 
+  const updateWeatherWidget = async (lat, lng) => {
+    const now = Date.now();
+    if (now - lastWeatherFetchTime < WEATHER_CACHE_MS) return;
+
+    try {
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current_weather=true`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Weather fetch failed');
+      const data = await res.json();
+      
+      if (data.current_weather) {
+        const temp = Math.round(data.current_weather.temperature);
+        const code = data.current_weather.weathercode;
+        const icon = getWeatherIcon(code);
+        
+        const weatherEl = document.getElementById('user-weather');
+        if (weatherEl) {
+          weatherEl.innerHTML = `<span>${icon}</span> <span>${temp}°C</span>`;
+          weatherEl.style.display = 'inline-flex';
+          lastWeatherFetchTime = now;
+        }
+      }
+    } catch (err) {
+      console.warn('[Weather] Could not fetch weather:', err);
+    }
+  };
+
+  const getWeatherIcon = (code) => {
+    if (code === 0) return '☀️';
+    if (code >= 1 && code <= 3) return '🌤️';
+    if (code === 45 || code === 48) return '🌫️';
+    if (code >= 51 && code <= 55) return '🌧️';
+    if (code >= 61 && code <= 65) return '🌧️';
+    if (code >= 71 && code <= 75) return '🌨️';
+    if (code >= 80 && code <= 82) return '🌦️';
+    if (code >= 95 && code <= 99) return '⛈️';
+    return '⛅';
+  };
+
   const requestLocation = () => {
     locationPrompt.style.display = 'none';
     if (watchId) return;
@@ -126,6 +167,9 @@ import { GeofencingManager } from './geofencing.js';
 
         // Update own coordinates display
         userCoords.textContent = `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+
+        // Update local weather info based on location
+        updateWeatherWidget(latitude, longitude);
 
         // Update directions module with current location
         DirectionsManager.setUserLocation(latitude, longitude);
@@ -338,6 +382,14 @@ import { GeofencingManager } from './geofencing.js';
 
     // Initialize search
     SearchManager.init(mapInstance);
+
+    // Initialize explore POI buttons
+    document.querySelectorAll('.explore-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const type = btn.dataset.poi;
+        SearchManager.togglePOI(type);
+      });
+    });
 
     // Initialize directions
     DirectionsManager.init(mapInstance);

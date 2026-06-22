@@ -7,6 +7,8 @@ export const SearchManager = (() => {
   let searchMarker = null;
   let searchCircle = null;
   let debounceTimer = null;
+  let poiLayer = null;
+  let activePOI = null;
   const DEBOUNCE_MS = 350;
   const NOMINATIM_BASE = 'https://nominatim.openstreetmap.org';
   const STORAGE_KEY = 'llt_recent_searches';
@@ -24,6 +26,7 @@ export const SearchManager = (() => {
    */
   const init = (mapInstance) => {
     map = mapInstance;
+    poiLayer = L.layerGroup().addTo(map);
     searchInput = document.getElementById('search-input');
     searchResults = document.getElementById('search-results');
     searchClear = document.getElementById('search-clear');
@@ -36,6 +39,9 @@ export const SearchManager = (() => {
     searchInput.addEventListener('input', () => {
       const query = searchInput.value.trim();
       searchClear.style.display = query ? 'flex' : 'none';
+
+      // Clear POI filters when typing in search input
+      clearPOI();
 
       if (!query) {
         showRecentSearches();
@@ -566,5 +572,140 @@ export const SearchManager = (() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(recent));
   };
 
-  return { init, searchPlaces, reverseGeocode, clearSearchMarker };
+  const togglePOI = async (type) => {
+    if (activePOI === type) {
+      clearPOI();
+      return;
+    }
+
+    clearPOI();
+    activePOI = type;
+    
+    // Set active pill state in UI
+    document.querySelectorAll('.explore-btn').forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.poi === type);
+    });
+
+    showLoadingPOI(type);
+
+    try {
+      const results = await fetchPOI(type);
+      plotPOI(results, type);
+    } catch (err) {
+      console.error('[Explore POI] Error fetching POIs:', err);
+      showPOIError(type, 'Search failed. Try again.');
+    }
+  };
+
+  const clearPOI = () => {
+    activePOI = null;
+    if (poiLayer) poiLayer.clearLayers();
+    document.querySelectorAll('.explore-btn').forEach((btn) => btn.classList.remove('active'));
+    if (searchResults) searchResults.classList.remove('open');
+  };
+
+  const fetchPOI = async (type) => {
+    if (!map) return [];
+    const bounds = map.getBounds();
+    const viewbox = `${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()},${bounds.getSouth()}`;
+    
+    const queries = {
+      fuel: 'fuel station',
+      hospital: 'hospital',
+      restaurant: 'restaurant'
+    };
+
+    const params = new URLSearchParams({
+      q: queries[type] || type,
+      format: 'json',
+      addressdetails: '1',
+      limit: '25',
+      viewbox: viewbox,
+      bounded: '1',
+      countrycodes: 'in'
+    });
+
+    const res = await fetch(`${NOMINATIM_BASE}/search?${params}`, {
+      headers: { 'User-Agent': 'LiveLocationTracker/1.0' },
+    });
+
+    if (!res.ok) throw new Error('POI fetch failed');
+    return await res.json();
+  };
+
+  const plotPOI = (results, type) => {
+    restoreButtonTexts();
+    if (poiLayer) poiLayer.clearLayers();
+
+    if (!results || results.length === 0) {
+      showPOIInfo(`No nearby ${type}s found in this view.`);
+      return;
+    }
+
+    const icons = {
+      fuel: '⛽',
+      hospital: '🏥',
+      restaurant: '🍔'
+    };
+    const iconChar = icons[type] || '📍';
+
+    results.forEach((r) => {
+      const lat = parseFloat(r.lat);
+      const lon = parseFloat(r.lon);
+      const name = r.display_name.split(',')[0].trim();
+
+      const icon = L.divIcon({
+        className: `poi-marker ${type}`,
+        html: `<span>${iconChar}</span>`,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14],
+        popupAnchor: [0, -14],
+      });
+
+      const marker = L.marker([lat, lon], { icon }).addTo(poiLayer);
+      marker.bindPopup(
+        `<div class="popup-name">${escapeHtml(name)}</div>
+         <div class="popup-coords" style="font-size:0.65rem; color:var(--text-muted); margin-top:2px;">${escapeHtml(r.display_name.split(',').slice(1, 4).join(',').trim())}</div>
+         <button class="btn-primary-small" style="font-size:0.6rem; padding:3px 6px; margin-top:6px; display:inline-block;" onclick="window.dispatchEvent(new CustomEvent('directions-requested', { detail: { lat: ${lat}, lng: ${lon}, name: '${escapeHtml(name)}' } }))">Directions</button>`,
+        { closeButton: true, className: 'dark-popup' }
+      );
+    });
+  };
+
+  const showLoadingPOI = (type) => {
+    const btn = document.querySelector(`.explore-btn[data-poi="${type}"]`);
+    if (btn) {
+      const label = btn.querySelector('span');
+      if (label) label.textContent = 'Searching...';
+    }
+  };
+
+  const showPOIInfo = (message) => {
+    restoreButtonTexts();
+    searchResults.innerHTML = `<div style="padding:12px; font-size:0.72rem; color:var(--text-muted); text-align:center;">${escapeHtml(message)}</div>`;
+    searchResults.classList.add('open');
+  };
+
+  const showPOIError = (type, message) => {
+    restoreButtonTexts();
+    searchResults.innerHTML = `<div style="padding:12px; font-size:0.72rem; color:var(--danger); text-align:center;">${escapeHtml(message)}</div>`;
+    searchResults.classList.add('open');
+  };
+
+  const restoreButtonTexts = () => {
+    const labels = {
+      fuel: 'Petrol',
+      hospital: 'Hospitals',
+      restaurant: 'Food'
+    };
+    document.querySelectorAll('.explore-btn').forEach((btn) => {
+      const type = btn.dataset.poi;
+      const label = btn.querySelector('span');
+      if (label && labels[type]) {
+        label.textContent = labels[type];
+      }
+    });
+  };
+
+  return { init, searchPlaces, reverseGeocode, clearSearchMarker, togglePOI, clearPOI };
 })();

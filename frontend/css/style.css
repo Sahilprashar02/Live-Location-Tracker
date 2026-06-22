@@ -1605,3 +1605,85 @@ body.light-map-active .popup-coords {
   vertical-align: middle;
 }
 
+/* User Weather Badge */
+.user-weather {
+  background: rgba(0, 210, 255, 0.12);
+  border: 1px solid rgba(0, 210, 255, 0.25);
+  color: var(--accent-cyan);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  line-height: 1;
+}
+
+/* Explore POI Pills styling */
+.explore-pills {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  overflow-x: auto;
+  scrollbar-width: none; /* Hide scrollbar Firefox */
+}
+.explore-pills::-webkit-scrollbar {
+  display: none; /* Hide scrollbar Chrome/Safari */
+}
+.explore-btn {
+  display: flex;
+  align-items: center;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  color: var(--text-muted);
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+  white-space: nowrap;
+}
+.explore-btn svg {
+  width: 12px;
+  height: 12px;
+  margin-right: 4px;
+  display: block;
+}
+.explore-btn:hover,
+.explore-btn.active {
+  background: rgba(0, 210, 255, 0.12);
+  border-color: rgba(0, 210, 255, 0.4);
+  color: var(--accent-cyan);
+}
+
+/* Custom POI markers on map */
+.poi-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: #ffffff;
+  border: 2px solid #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  font-size: 11px;
+  transition: transform 0.2s ease;
+}
+.poi-marker:hover {
+  transform: scale(1.18);
+  z-index: 1005 !important;
+}
+.poi-marker.fuel {
+  background: #ff9f43; /* Yellow/Orange */
+}
+.poi-marker.hospital {
+  background: #ea5455; /* Red */
+}
+.poi-marker.restaurant {
+  background: #28c76f; /* Green */
+}
+
+
