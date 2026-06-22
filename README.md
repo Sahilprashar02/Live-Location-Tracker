@@ -35,17 +35,22 @@ Unlike traditional real-time apps that write to a database on every event (O(n) 
 - **🔐 Dual-Mode Authentication**: Seamlessly supports both **Google OAuth 2.0** sessions and **JWT-based** authentication for cross-domain and mobile compatibility.
 - **🛰️ High-Precision Tracking**: Uses browser Geolocation API with high-accuracy settings for precise movement.
 - **🗺️ Premium Dark Interface**: A sleek, glassmorphic UI built with Vanilla CSS and Leaflet.js, featuring CartoDB Dark Matter tiles.
+- **🛣️ OSRM Multi-Profile Routing**: Calculates turn-by-turn routing with free, unlimited OSRM profiles for Driving, Walking, and Cycling.
+- **🔍 Smart Autocomplete & Viewbox Bias**: Instant place suggestions container beneath directions inputs, localized via Leaflet bounding box biasing (`viewbox`) and restricted to India (`countrycodes=in`).
+- **💡 Robust Geocode Fallback Parser**: Automatically strips building/house prefixes and cleans common road suffixes (e.g. `rd`, `road`, `st`, `street`) to resolve OpenStreetMap Nominatim's strict keyword index mismatching.
+- **🔄 Dynamic Auto-Re-routing**: Tracks GPS coordinates dynamically. If a route starting point is `"Your location"`, the app automatically recalculates and redraws the path whenever you travel more than **15 meters**.
+- **🎨 Lucide-Style SVG Icons**: Legacy emojis and low-fidelity unicode characters upgraded to clean, responsive inline SVGs with smooth CSS transitions and hover states.
 - **👥 Intelligent Multi-Session Support**: Refactored socket logic allows users to be logged in from multiple tabs or devices simultaneously without session clashing.
 - **⚡ Event-Driven Architecture**: Powered by Apache Kafka (KRaft mode) for professional-grade event streaming.
 - **💾 Batch Persistence**: Efficient MongoDB write-buffering via dedicated Kafka consumers.
-- **📱 Fully Responsive**: Optimized for both desktop and mobile devices with a custom sidebar for online users.
+- **📱 Fully Responsive**: Realignment of all sidebars, search containers, status bars, and floating headers. Optimized for desktop and mobile navigation.
 
 ---
 
 ## 🛠️ Tech Stack
 
 - **Frontend**: HTML5, Vanilla CSS (Glassmorphism), JavaScript (ESM)
-- **Maps**: Leaflet.js, CartoDB Tiles
+- **Maps & Routing**: Leaflet.js, CartoDB Tiles, OSRM (Open Source Routing Machine), OSM Nominatim Geocoding
 - **Backend**: Node.js, Express
 - **Real-time**: Socket.IO 4.x
 - **Messaging**: Apache Kafka (kafkajs)

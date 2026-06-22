@@ -5,7 +5,14 @@ export const AuthManager = (() => {
   // Safe check for Vite environment variables
   const API_BASE = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE)
     ? import.meta.env.VITE_API_BASE
-    : 'http://localhost:3000';
+    : (window.location.hostname === 'localhost' && window.location.port !== '3000'
+      ? 'http://localhost:3000'
+      : window.location.origin);
+
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem('auth_token');
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
 
   /**
    * Check if user is currently authenticated
@@ -80,5 +87,5 @@ export const AuthManager = (() => {
     }
   };
 
-  return { checkAuth, login, logout, updateUserUI };
+  return { checkAuth, login, logout, updateUserUI, getApiBase: () => API_BASE, getAuthHeaders };
 })();

@@ -4,6 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="Real-time live location tracker with interactive map. Share your location and see others moving in real-time.">
+  <meta name="theme-color" content="#0a0a1a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="manifest" href="/manifest.json">
   <title>Live Location Tracker</title>
 
   <!-- Google Fonts -->
@@ -49,15 +52,29 @@
 
         <div class="login-features">
           <div class="feature-item">
-            <div class="feature-icon">📍</div>
+            <div class="feature-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/>
+                <circle cx="12" cy="10" r="3"/>
+              </svg>
+            </div>
             <span>Real-time tracking</span>
           </div>
           <div class="feature-item">
-            <div class="feature-icon">🔒</div>
+            <div class="feature-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0110 0v4"/>
+              </svg>
+            </div>
             <span>Secure & private</span>
           </div>
           <div class="feature-item">
-            <div class="feature-icon">⚡</div>
+            <div class="feature-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+              </svg>
+            </div>
             <span>Powered by Kafka</span>
           </div>
         </div>
@@ -70,6 +87,11 @@
     <!-- Map Container -->
     <div id="map"></div>
 
+    <div id="tracking-banner" class="tracking-banner glass-panel" hidden>
+      <span class="tracking-pulse"></span>
+      <div><strong>Following <span data-tracking-name>live location</span></strong><small data-tracking-state>Updates in real time</small></div>
+    </div>
+
     <!-- Status Bar -->
     <div id="status-bar" class="glass-panel">
       <div class="status-left">
@@ -79,6 +101,42 @@
       <div class="status-right">
         <span id="online-count">0 online</span>
       </div>
+    </div>
+
+    <!-- Search Bar -->
+    <div id="search-container" class="search-container">
+      <div class="search-bar glass-panel">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"/>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        <input type="text" id="search-input" class="search-input" placeholder="Search places, addresses..." autocomplete="off" spellcheck="false" />
+        <button id="search-clear" class="search-clear" style="display: none;" title="Clear search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div id="search-results" class="search-results glass-panel"></div>
+    </div>
+
+    <!-- Map Context Menu (Right-click) -->
+    <div id="map-context-menu" class="map-context-menu glass-panel">
+      <div class="context-coords">0.000000, 0.000000</div>
+      <div class="context-divider"></div>
+      <button id="btn-whats-here" class="context-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/></svg>
+        <span>What's here?</span>
+      </button>
+      <button id="btn-copy-coords" class="context-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+        <span>Copy coordinates</span>
+      </button>
+      <button id="btn-directions-here" class="context-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+        <span>Directions to here</span>
+      </button>
     </div>
 
     <!-- User Panel -->
@@ -118,7 +176,14 @@
       </div>
       <div id="users-list" class="users-list">
         <div class="empty-state">
-          <span class="empty-icon">👥</span>
+          <span class="empty-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
+              <circle cx="9" cy="7" r="4"/>
+              <path d="M23 21v-2a4 4 0 00-3-3.87"/>
+              <path d="M16 3.13a4 4 0 010 7.75"/>
+            </svg>
+          </span>
           <p>No other users online</p>
         </div>
       </div>
@@ -135,9 +200,230 @@
       <span id="mobile-badge" class="mobile-badge">0</span>
     </button>
 
+    <!-- Map Layer Toggle Button -->
+    <button id="btn-layer-toggle" class="btn-layer-toggle glass-panel" title="Map layers">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+        <polyline points="2 17 12 22 22 17"/>
+        <polyline points="2 12 12 17 22 12"/>
+      </svg>
+    </button>
+
+    <!-- Map Layer Picker Panel -->
+    <div id="layer-picker" class="layer-picker glass-panel">
+      <div class="layer-picker-header">
+        <h3>Map Type</h3>
+      </div>
+      <div class="layer-grid"></div>
+    </div>
+
+    <!-- Directions Toggle Button -->
+    <button id="btn-directions-toggle" class="btn-directions-toggle glass-panel" title="Directions">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polygon points="3 11 22 2 13 21 11 13 3 11"/>
+      </svg>
+    </button>
+
+    <!-- Directions Panel -->
+    <div id="directions-panel" class="directions-panel glass-panel">
+      <div class="directions-header">
+        <h3>Directions</h3>
+        <button id="btn-close-directions" class="btn-icon btn-small" title="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Travel Mode Selector -->
+      <div class="profile-selector">
+        <button class="profile-btn active" data-profile="driving" title="Drive">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 001 12v4c0 .6.4 1 1 1h2"/>
+            <circle cx="7" cy="17" r="2"/>
+            <path d="M9 17h6"/>
+            <circle cx="17" cy="17" r="2"/>
+          </svg>
+        </button>
+        <button class="profile-btn" data-profile="walking" title="Walk">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="13" cy="4" r="2"/>
+            <path d="M13 18l-3-6 1-4 2 2h3"/>
+            <path d="M10 8l-3 4-2 3"/>
+            <path d="M12 12l1 5 3 4"/>
+            <path d="M8 22l1-4 2-2"/>
+          </svg>
+        </button>
+        <button class="profile-btn" data-profile="cycling" title="Bike">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="5.5" cy="17.5" r="3.5"/>
+            <circle cx="18.5" cy="17.5" r="3.5"/>
+            <path d="M15 6a1 1 0 100-2 1 1 0 000 2zm-3 5.5L8.5 6H5m7 5.5L15.5 17m-3.5-5.5h6.5m-3-6h-3.5l-3 5.5"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Start / End Inputs -->
+      <div class="directions-inputs">
+        <div style="position: relative;">
+          <div class="directions-input-row">
+            <div class="input-dot start"></div>
+            <input type="text" id="directions-start" class="directions-input" placeholder="Choose starting point..." autocomplete="off" />
+            <button id="btn-my-location" class="btn-icon btn-small" title="Use my location">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/></svg>
+            </button>
+          </div>
+          <div id="directions-start-results" class="directions-results glass-panel" style="display: none;"></div>
+        </div>
+        <div class="input-connector"></div>
+        <div style="position: relative;">
+          <div class="directions-input-row">
+            <div class="input-dot end"></div>
+            <input type="text" id="directions-end" class="directions-input" placeholder="Choose destination..." autocomplete="off" />
+            <button id="btn-swap-directions" class="btn-icon btn-small" title="Swap">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="7 16 3 12 7 8"/><polyline points="17 8 21 12 17 16"/><line x1="3" y1="12" x2="21" y2="12"/></svg>
+            </button>
+          </div>
+          <div id="directions-end-results" class="directions-results glass-panel" style="display: none;"></div>
+        </div>
+      </div>
+
+      <!-- Route Summary -->
+      <div id="directions-summary" class="directions-summary" style="display: none;"></div>
+
+      <!-- Turn-by-turn Instructions -->
+      <div id="directions-instructions" class="directions-instructions"></div>
+    </div>
+
+    <!-- Map tools -->
+    <div id="tools-dock" class="tools-dock glass-panel">
+      <button class="tool-btn" data-tool="measure-distance" id="btn-measure-distance" title="Measure distance">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21.3 8.25a2.25 2.25 0 010 3.18l-9.87 9.87a2.25 2.25 0 01-3.18 0l-6.18-6.18a2.25 2.25 0 010-3.18l9.87-9.87a2.25 2.25 0 013.18 0l6.18 6.18z"/>
+          <path d="M9 6l1.5 1.5M11.5 8.5L13 10M14 11l1.5 1.5M16.5 13.5L18 15M19 16l1.5 1.5"/>
+        </svg>
+      </button>
+      <button class="tool-btn" data-tool="measure-area" id="btn-measure-area" title="Measure area">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3l8 5v8l-8 5-8-5V8z"/>
+          <path d="M12 3v18M4 8h16M4 16h16"/>
+        </svg>
+      </button>
+      <button class="tool-btn" data-tool="drop-pin" id="btn-drop-pin" title="Drop pin">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/>
+          <circle cx="12" cy="10" r="3"/>
+        </svg>
+      </button>
+      <button class="tool-btn" id="btn-clear-tools" title="Clear tools">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2M10 11v6M14 11v6"/>
+        </svg>
+      </button>
+      <button class="tool-btn" id="btn-fullscreen" title="Fullscreen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/>
+        </svg>
+      </button>
+    </div>
+    <div id="tool-info" class="tool-info glass-panel" style="display:none"></div>
+    <div id="measure-total" class="measure-total glass-panel" style="display:none"></div>
+    <div id="live-coords" class="live-coords glass-panel">—</div>
+
+    <!-- Sharing, friends, and alerts -->
+    <section id="community-panel" class="community-panel glass-panel">
+      <header>
+        <div>
+          <h3>People & sharing</h3>
+          <p>Share only when you choose.</p>
+        </div>
+        <button id="btn-close-community" class="btn-icon" aria-label="Close">✕</button>
+      </header>
+      <nav class="community-tabs">
+        <button class="active" data-community-tab="share">Share</button>
+        <button data-community-tab="friends">Friends</button>
+        <button data-community-tab="alerts">Alerts</button>
+      </nav>
+      <div id="community-share" class="community-view active">
+        <label>Sharing duration
+          <select id="share-duration"><option value="1h">1 hour</option><option value="8h">8 hours</option><option value="forever">Until I turn it off</option></select>
+        </label>
+        <button id="btn-create-share" class="btn-primary panel-action">Create private link</button>
+        <div id="share-link-output" class="share-link-output" hidden>
+          <div id="share-qr"></div>
+          <div><input readonly><button data-copy-share class="btn-primary-small">Copy</button></div>
+        </div>
+        <h4>Recent links</h4>
+        <div id="share-sessions-list" class="panel-list"></div>
+      </div>
+      <div id="community-friends" class="community-view">
+        <div class="inline-form"><input id="friend-email" type="email" placeholder="Friend's email"><button id="btn-add-friend" class="btn-primary-small">Add</button></div>
+        <div id="friends-list" class="panel-list"></div>
+      </div>
+      <div id="community-alerts" class="community-view">
+        <p class="panel-hint">Place the map center over a destination, then create an arrival alert.</p>
+        <button id="btn-enable-notifications" class="btn-danger-quiet panel-action">Enable notifications</button>
+        <input id="geofence-name" placeholder="Alert name, e.g. Home">
+        <select id="geofence-target"></select>
+        <div class="inline-form"><input id="geofence-radius" type="number" min="25" value="250"><select id="geofence-trigger"><option value="both">Enter or exit</option><option value="enter">Enter</option><option value="exit">Exit</option></select></div>
+        <button id="btn-create-geofence" class="btn-primary panel-action">Create alert here</button>
+        <div id="geofence-list" class="panel-list"></div>
+      </div>
+    </section>
+
+    <nav class="mobile-bottom-nav glass-panel" aria-label="Map actions">
+      <button data-mobile-action="search">
+        <span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+        </span>
+        Search
+      </button>
+      <button data-mobile-action="directions">
+        <span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="3 11 22 2 13 21 11 13 3 11"/>
+          </svg>
+        </span>
+        Go
+      </button>
+      <button data-mobile-action="people">
+        <span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
+            <circle cx="9" cy="7" r="4"/>
+            <path d="M23 21v-2a4 4 0 00-3-3.87"/>
+            <path d="M16 3.13a4 4 0 010 7.75"/>
+          </svg>
+        </span>
+        People
+      </button>
+      <button data-mobile-action="locate">
+        <span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <circle cx="12" cy="12" r="3"/>
+            <line x1="12" y1="1" x2="12" y2="3"/>
+            <line x1="12" y1="21" x2="12" y2="23"/>
+            <line x1="1" y1="12" x2="3" y2="12"/>
+            <line x1="21" y1="12" x2="23" y2="12"/>
+          </svg>
+        </span>
+        Locate
+      </button>
+    </nav>
+
     <!-- Location Permission Prompt -->
     <div id="location-prompt" class="glass-panel location-prompt" style="display: none;">
-      <div class="prompt-icon">📍</div>
+      <div class="prompt-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/>
+          <circle cx="12" cy="10" r="3"/>
+        </svg>
+      </div>
       <h3>Location Permission Required</h3>
       <p>Allow location access to share your position on the map</p>
       <button id="btn-allow-location" class="btn-primary">Allow Location</button>
@@ -152,6 +438,7 @@
 
   <!-- Socket.IO Client (CDN for Vercel compatibility) -->
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
   <!-- App JS (Main Entry Point) -->
   <script type="module" src="js/app.js"></script>

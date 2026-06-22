@@ -1,4 +1,6 @@
 const { createConsumer, TOPIC } = require('../config/kafka');
+const ShareSession = require('../models/ShareSession');
+const Friend = require('../models/Friend');
 
 // Simple LRU-like dedup cache (max 10,000 entries)
 const processedEvents = new Map();
@@ -42,8 +44,7 @@ const startBroadcastConsumer = async (io) => {
           }
           addToCache(locationEvent.eventId);
 
-          // Broadcast to all connected clients
-          io.emit('location-update', {
+          const payload = {
             userId: locationEvent.userId,
             displayName: locationEvent.displayName,
             avatar: locationEvent.avatar,
@@ -51,6 +52,26 @@ const startBroadcastConsumer = async (io) => {
             longitude: locationEvent.longitude,
             accuracy: locationEvent.accuracy,
             timestamp: locationEvent.timestamp,
+          };
+
+          // Send coordinates only to the owner and accepted friends.
+          io.to(`user:${locationEvent.userId}`).emit('location-update', payload);
+          const friendLinks = await Friend.find({
+            friendId: locationEvent.userId,
+            status: 'accepted',
+          }).select('userId').lean();
+          friendLinks.forEach(({ userId }) => {
+            io.to(`user:${userId}`).emit('location-update', payload);
+          });
+
+          // Share-link viewers receive only the owner they explicitly opened.
+          const activeShares = await ShareSession.find({
+            ownerId: locationEvent.userId,
+            isActive: true,
+            $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }],
+          }).select('shareCode').lean();
+          activeShares.forEach(({ shareCode }) => {
+            io.to(`share:${shareCode}`).emit('share-location-update', payload);
           });
         } catch (error) {
           console.error('❌ Broadcast consumer message error:', error.message);

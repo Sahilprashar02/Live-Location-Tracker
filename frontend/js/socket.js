@@ -12,6 +12,7 @@ export const SocketManager = (() => {
   let onActiveUsers = null;
   let onConnectionChange = null;
   let onError = null;
+  let onGeofenceAlert = null;
 
   /**
    * Connect to the Socket.IO server
@@ -23,11 +24,14 @@ export const SocketManager = (() => {
     onActiveUsers = callbacks.onActiveUsers || (() => {});
     onConnectionChange = callbacks.onConnectionChange || (() => {});
     onError = callbacks.onError || (() => {});
+    onGeofenceAlert = callbacks.onGeofenceAlert || (() => {});
 
     // Safe check for Vite environment variables
     const API_BASE = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE)
       ? import.meta.env.VITE_API_BASE
-      : 'http://localhost:3000';
+      : (window.location.hostname === 'localhost' && window.location.port !== '3000'
+        ? 'http://localhost:3000'
+        : window.location.origin);
 
     const token = localStorage.getItem('auth_token');
 
@@ -80,6 +84,10 @@ export const SocketManager = (() => {
       onError(data.message);
     });
 
+    socket.on('geofence-alert', (data) => {
+      onGeofenceAlert(data);
+    });
+
     return socket;
   };
 
@@ -111,5 +119,23 @@ export const SocketManager = (() => {
 
   const getStatus = () => isConnected;
 
-  return { connect, sendLocation, disconnect, getStatus };
+  const connectShare = (shareCode, callbacks = {}) => {
+    const API_BASE = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE)
+      ? import.meta.env.VITE_API_BASE
+      : (window.location.hostname === 'localhost' && window.location.port !== '3000'
+        ? 'http://localhost:3000'
+        : window.location.origin);
+    socket = io(API_BASE, {
+      auth: { shareCode },
+      transports: ['websocket', 'polling'],
+    });
+    socket.on('share-location-update', (data) => callbacks.onLocationUpdate?.(data));
+    socket.on('share-session-ended', () => callbacks.onEnded?.());
+    socket.on('connect_error', (error) => callbacks.onError?.(error.message));
+    return socket;
+  };
+
+  const getSocket = () => socket;
+
+  return { connect, connectShare, sendLocation, disconnect, getStatus, getSocket };
 })();

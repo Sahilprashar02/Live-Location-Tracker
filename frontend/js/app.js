@@ -5,6 +5,11 @@
 import { AuthManager } from './auth.js';
 import { SocketManager } from './socket.js';
 import { MapManager } from './map.js';
+import { SearchManager } from './search.js';
+import { DirectionsManager } from './directions.js';
+import { ToolsManager } from './tools.js';
+import { SharingManager } from './sharing.js';
+import { GeofencingManager } from './geofencing.js';
 
 (() => {
   if (window.location.hostname === 'localhost' && window.location.port === '5500') {
@@ -122,6 +127,9 @@ import { MapManager } from './map.js';
         // Update own coordinates display
         userCoords.textContent = `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
 
+        // Update directions module with current location
+        DirectionsManager.setUserLocation(latitude, longitude);
+
         // Show your own marker immediately. The socket/Kafka round trip updates
         // every other connected browser, but your map should not wait on it.
         MapManager.addOrUpdateMarker({
@@ -236,16 +244,31 @@ import { MapManager } from './map.js';
     onError: (message) => {
       showToast(message, 'error');
     },
+
+    onGeofenceAlert: (data) => {
+      showToast(`${data.targetName} ${data.event} ${data.name}`, 'success');
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification('Location alert', { body: `${data.targetName} ${data.event} ${data.name}` });
+      }
+    },
   };
 
   // ========== SIDEBAR TOGGLE ==========
   const setupSidebar = () => {
     btnToggleSidebar.addEventListener('click', () => {
       usersSidebar.classList.toggle('collapsed');
+      if (!usersSidebar.classList.contains('collapsed')) {
+        document.getElementById('directions-panel')?.classList.remove('open');
+        document.getElementById('community-panel')?.classList.remove('open');
+      }
     });
 
     btnMobileSidebar.addEventListener('click', () => {
       usersSidebar.classList.toggle('mobile-open');
+      if (usersSidebar.classList.contains('mobile-open')) {
+        document.getElementById('directions-panel')?.classList.remove('open');
+        document.getElementById('community-panel')?.classList.remove('open');
+      }
     });
 
     // Close mobile sidebar when clicking outside
@@ -264,6 +287,23 @@ import { MapManager } from './map.js';
 
   // ========== INIT ==========
   const init = async () => {
+    const trackingMatch = window.location.pathname.match(/^\/track\/([A-Za-z0-9_-]+)$/);
+    if (trackingMatch) {
+      loginScreen.classList.remove('active');
+      mapScreen.classList.add('active');
+      document.body.classList.add('tracking-mode');
+      const mapInstance = MapManager.init('shared-viewer');
+      SearchManager.init(mapInstance);
+      try {
+        await SharingManager.initViewer(trackingMatch[1], mapInstance);
+      } catch (error) {
+        showToast(error.message, 'error');
+        document.querySelector('[data-tracking-state]').textContent = error.message;
+        document.getElementById('tracking-banner').hidden = false;
+      }
+      return;
+    }
+
     // Check authentication
     currentUser = await AuthManager.checkAuth();
 
@@ -294,7 +334,30 @@ import { MapManager } from './map.js';
     updateUsersList();
 
     // Initialize map
-    MapManager.init(currentUser.id);
+    const mapInstance = MapManager.init(currentUser.id);
+
+    // Initialize search
+    SearchManager.init(mapInstance);
+
+    // Initialize directions
+    DirectionsManager.init(mapInstance);
+    ToolsManager.init(mapInstance);
+    SharingManager.init({ showToast });
+    GeofencingManager.init(mapInstance, { showToast });
+
+    // Directions toggle button
+    const btnDirectionsToggle = document.getElementById('btn-directions-toggle');
+    if (btnDirectionsToggle) {
+      btnDirectionsToggle.addEventListener('click', () => {
+        if (DirectionsManager.isOpen()) {
+          DirectionsManager.close();
+        } else {
+          DirectionsManager.open();
+        }
+      });
+    }
+
+    window.addEventListener('directions-requested', (event) => DirectionsManager.open(event.detail));
 
     // Connect socket
     SocketManager.connect(socketCallbacks);
@@ -305,15 +368,27 @@ import { MapManager } from './map.js';
     // Setup sidebar
     setupSidebar();
 
+    document.querySelectorAll('[data-mobile-action]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const action = button.dataset.mobileAction;
+        if (action === 'search') document.getElementById('search-input')?.focus();
+        if (action === 'directions') DirectionsManager.open();
+        if (action === 'people') SharingManager.openPanel();
+        if (action === 'locate') requestLocation();
+      });
+    });
+
     // Logout handler
     btnAllowLocation.addEventListener('click', requestLocation);
-    btnShareLocation.addEventListener('click', requestLocation);
-
     btnLogout.addEventListener('click', () => {
       if (watchId) navigator.geolocation.clearWatch(watchId);
       SocketManager.disconnect();
       AuthManager.logout();
     });
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch((error) => console.warn('Service worker:', error));
+    }
   };
 
   // Run on DOM ready

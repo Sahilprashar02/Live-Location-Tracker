@@ -12,6 +12,7 @@ const jwt = require('jsonwebtoken');
 
 // Model and Config imports
 const User = require('./models/User');
+const ShareSession = require('./models/ShareSession');
 const connectDB = require('./config/db');
 const { initKafka, disconnectKafka } = require('./config/kafka');
 
@@ -50,6 +51,9 @@ try {
 
 const passport = require('./config/passport');
 const authRoutes = require('./routes/auth');
+const shareRoutes = require('./routes/share');
+const friendsRoutes = require('./routes/friends');
+const geofenceRoutes = require('./routes/geofences');
 
 // Initialize Express
 const app = express();
@@ -96,6 +100,9 @@ app.use(passport.session());
 
 // Routes
 app.use('/auth', authRoutes);
+app.use('/api/share', shareRoutes);
+app.use('/api/friends', friendsRoutes);
+app.use('/api/geofences', geofenceRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
@@ -103,6 +110,7 @@ app.get('/health', (req, res) => {
 });
 
 // Single-origin frontend hosting
+app.use(express.static(path.join(FRONTEND_PATH, 'public')));
 app.use(express.static(FRONTEND_PATH));
 app.get('*', (req, res) => {
   res.sendFile(path.join(FRONTEND_PATH, 'index.html'));
@@ -121,10 +129,20 @@ const io = new Server(server, {
   pingTimeout: 30000,
   pingInterval: 10000,
 });
+app.set('io', io);
 
 // Socket.IO middleware for authentication (Supports both Session and JWT)
 io.use(async (socket, next) => {
   try {
+    const shareCode = String(socket.handshake.auth.shareCode || '').trim();
+    if (shareCode) {
+      const shareSession = await ShareSession.findOne({ shareCode, isActive: true }).lean();
+      if (shareSession && (!shareSession.expiresAt || shareSession.expiresAt > new Date())) {
+        socket.data.shareGuest = { shareCode, ownerId: shareSession.ownerId.toString() };
+        return next();
+      }
+    }
+
     // 1. Check for JWT token (Preferred for Vercel/Incognito)
     const token = socket.handshake.auth.token;
     if (token) {

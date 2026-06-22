@@ -1,5 +1,7 @@
 const { v4: uuidv4 } = require('uuid');
 const { producer, TOPIC } = require('../config/kafka');
+const ShareSession = require('../models/ShareSession');
+const Geofence = require('../models/Geofence');
 
 // Track active users: socketId -> { userId, displayName, avatar, lastUpdate, lastLocationAt }
 const activeUsers = new Map();
@@ -31,6 +33,13 @@ const validateLocationData = (data) => {
 const initSocketHandler = (io) => {
 
   io.on('connection', async (socket) => {
+    if (socket.data.shareGuest) {
+      const { shareCode } = socket.data.shareGuest;
+      socket.join(`share:${shareCode}`);
+      socket.emit('share-session-joined', { shareCode });
+      return;
+    }
+
     // Derive userId from JWT user (set in server.js) or session user
     const userId = socket.request.user?._id?.toString() || 
                    socket.request.session?.passport?.user?.toString();
@@ -58,6 +67,8 @@ const initSocketHandler = (io) => {
       lastUpdate: Date.now(),
       lastLocationAt: null,
     };
+    socket.join('authenticated');
+    socket.join(`user:${userInfo.userId}`);
 
     // Check if this is the first socket for this user (to avoid redundant broadcasts)
     const isFirstSocket = !Array.from(activeUsers.values()).some(u => u.userId === userInfo.userId);
@@ -80,7 +91,7 @@ const initSocketHandler = (io) => {
 
     // Notify others only if this is the user's first connection
     if (isFirstSocket) {
-      socket.broadcast.emit('user-connected', {
+      socket.to('authenticated').emit('user-connected', {
         userId: userInfo.userId,
         displayName: userInfo.displayName,
         avatar: userInfo.avatar,
@@ -121,6 +132,42 @@ const initSocketHandler = (io) => {
           timestamp: now,
         };
 
+        const watchedGeofences = await Geofence.find({
+          targetUserId: userInfo.userId,
+          isActive: true,
+        });
+        for (const fence of watchedGeofences) {
+          const distance = haversineMeters(
+            data.latitude,
+            data.longitude,
+            fence.center.lat,
+            fence.center.lng
+          );
+          const nextState = distance <= fence.radius ? 'inside' : 'outside';
+          const changed = fence.lastState !== 'unknown' && fence.lastState !== nextState;
+          const triggerMatches = fence.triggerOn === 'both'
+            || (fence.triggerOn === 'enter' && nextState === 'inside')
+            || (fence.triggerOn === 'exit' && nextState === 'outside');
+
+          if (changed && triggerMatches) {
+            io.to(`user:${fence.userId}`).emit('geofence-alert', {
+              geofenceId: fence._id,
+              name: fence.name,
+              targetUserId: userInfo.userId,
+              targetName: userInfo.displayName,
+              event: nextState === 'inside' ? 'entered' : 'exited',
+              latitude: data.latitude,
+              longitude: data.longitude,
+              timestamp: now,
+            });
+          }
+
+          if (fence.lastState !== nextState) {
+            fence.lastState = nextState;
+            await fence.save();
+          }
+        }
+
         // Publish to Kafka — this is where Kafka enters the actual flow
         // The event will be consumed by:
         //   1. Broadcast consumer → pushes to all Socket.IO clients
@@ -140,6 +187,18 @@ const initSocketHandler = (io) => {
       }
     });
 
+    socket.on('join-share-session', async ({ shareCode } = {}) => {
+      const session = await ShareSession.findOne({ shareCode, isActive: true }).lean();
+      if (!session || (session.expiresAt && session.expiresAt <= new Date())) {
+        return socket.emit('error-message', { message: 'Share session is inactive or expired' });
+      }
+      socket.join(`share:${shareCode}`);
+    });
+
+    socket.on('leave-share-session', ({ shareCode } = {}) => {
+      if (shareCode) socket.leave(`share:${shareCode}`);
+    });
+
     // Handle disconnect
     socket.on('disconnect', (reason) => {
       console.log(`🔴 Socket disconnected: ${user.displayName} (${socket.id}) - ${reason}`);
@@ -153,7 +212,7 @@ const initSocketHandler = (io) => {
       if (!hasOtherSockets) {
         rateLimitMap.delete(userInfo.userId);
         // Only broadcast disconnected if NO sockets remain for this user
-        io.emit('user-disconnected', {
+        io.to('authenticated').emit('user-disconnected', {
           userId: userInfo.userId,
           displayName: userInfo.displayName
         });
@@ -182,13 +241,22 @@ const initSocketHandler = (io) => {
         const hasOtherSockets = Array.from(activeUsers.values()).some(u => u.userId === info.userId);
         if (!hasOtherSockets) {
           rateLimitMap.delete(info.userId);
-          io.emit('user-disconnected', { userId: info.userId });
+          io.to('authenticated').emit('user-disconnected', { userId: info.userId });
         }
       }
     }
   }, 10000); // Check every 10 seconds
 
   console.log('🔌 Socket.IO handler initialized');
+};
+
+const haversineMeters = (lat1, lng1, lat2, lng2) => {
+  const toRad = (degrees) => degrees * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
 module.exports = { initSocketHandler, activeUsers };
