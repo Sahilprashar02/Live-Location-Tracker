@@ -39,6 +39,9 @@ Unlike traditional real-time apps that write to a database on every event (O(n) 
 - **🛰️ High-Precision Tracking**: Uses browser Geolocation API with high-accuracy settings for precise movement.
 - **🗺️ Premium Dark Interface**: A sleek, glassmorphic UI built with Vanilla CSS and Leaflet.js, featuring CartoDB Dark Matter tiles.
 - **🛣️ OSRM Multi-Profile Routing**: Calculates turn-by-turn routing with free, unlimited OSRM profiles for Driving, Walking, and Cycling.
+- **🌡️ Live Geolocation Weather**: Continuous weather tracking using the free **Open-Meteo API** (cached for 5 mins) to display local conditions and temperature directly beside your username.
+- **⛽🏥 Explore Nearby POIs**: Google Maps-style quick filters (Petrol, Hospitals, Food) that query OSM Nominatim to fetch and overlay POI markers in the current map bounds.
+- **🎯 Interactive POI Directions**: Click any nearby POI pin to open a popup and request directions to it instantly.
 - **🔍 Smart Autocomplete & Viewbox Bias**: Instant place suggestions container beneath directions inputs, localized via Leaflet bounding box biasing (`viewbox`) and restricted to India (`countrycodes=in`).
 - **💡 Robust Geocode Fallback Parser**: Automatically strips building/house prefixes and cleans common road suffixes (e.g. `rd`, `road`, `st`, `street`) to resolve OpenStreetMap Nominatim's strict keyword index mismatching.
 - **🔄 Dynamic Auto-Re-routing**: Tracks GPS coordinates dynamically. If a route starting point is `"Your location"`, the app automatically recalculates and redraws the path whenever you travel more than **15 meters**.
@@ -53,7 +56,7 @@ Unlike traditional real-time apps that write to a database on every event (O(n) 
 ## 🛠️ Tech Stack
 
 - **Frontend**: HTML5, Vanilla CSS (Glassmorphism), JavaScript (ESM)
-- **Maps & Routing**: Leaflet.js, CartoDB Tiles, OSRM (Open Source Routing Machine), OSM Nominatim Geocoding
+- **Maps, Routing & APIs**: Leaflet.js, CartoDB Tiles, OSRM (Open Source Routing Machine), OSM Nominatim Geocoding, Open-Meteo API
 - **Backend**: Node.js, Express
 - **Real-time**: Socket.IO 4.x
 - **Messaging**: Apache Kafka (kafkajs)
