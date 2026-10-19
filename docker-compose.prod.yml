@@ -1,0 +1,68 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# Live Location Tracker — Production Docker Compose (backend only)
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# This compose file manages ONLY the application backend container.
+# Global infrastructure (nginx, mongodb, redis, kafka) is managed separately in
+# the Infra repo (/opt/apps/infra) and is NOT defined here.
+#
+# Prerequisites (one-time, on the server):
+#   - docker network create platform-network        (pre-exists)
+#   - global-mongodb running; user created via:
+#       /opt/apps/infra/scripts/add-app-mongo-user.sh location_tracker location_tracker_user '<pass>'
+#   - global-kafka running (Infra compose):  docker compose up -d kafka
+#
+# Server deploy path: /opt/apps/live-location-tracker/
+#
+# Usage:
+#   docker compose -f docker-compose.prod.yml build backend
+#   docker compose -f docker-compose.prod.yml up -d
+#   docker compose -f docker-compose.prod.yml ps
+#   docker compose -f docker-compose.prod.yml logs -f backend
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+
+name: llt
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: llt-backend:latest
+    container_name: llt-backend
+    restart: unless-stopped
+    # NO ports exposed to host — global-nginx reaches it via platform-network.
+    env_file:
+      - .env
+    environment:
+      # Safe defaults; real values/secrets come from /opt/apps/live-location-tracker/.env.
+      # dotenv never overrides existing env vars, so compose wins without code changes.
+      - NODE_ENV=production
+      - PORT=5000
+    networks:
+      - platform-network
+    healthcheck:
+      # /health returns 200 only when MongoDB is connected, else 503.
+      test: ["CMD", "wget", "-qO-", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    deploy:
+      resources:
+        limits:
+          # Single persistent Node process (see Dockerfile header).
+          memory: 1G
+
+# ─── External Network ────────────────────────────────────────────────────────
+# Shared with global infrastructure (nginx, mongodb, redis, kafka).
+# Create once on the server if missing: docker network create platform-network
+networks:
+  platform-network:
+    external: true

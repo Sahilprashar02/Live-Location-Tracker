@@ -7,6 +7,7 @@ const session = require('express-session');
 const MongoStore = require('connect-mongo');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
 
@@ -105,16 +106,43 @@ app.use('/api/friends', friendsRoutes);
 app.use('/api/geofences', geofenceRoutes);
 
 // Health check
+// Returns 200 only when MongoDB is connected, otherwise 503, so the Docker
+// healthcheck reflects real readiness instead of just "process alive".
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  const READY_STATES = {
+    0: 'disconnected',
+    1: 'connected',
+    2: 'connecting',
+    3: 'disconnecting',
+  };
+  const readyState = mongoose.connection.readyState;
+  const healthy = readyState === 1;
+
+  res.status(healthy ? 200 : 503).json({
+    status: healthy ? 'ok' : 'degraded',
+    timestamp: new Date().toISOString(),
+    database: { status: READY_STATES[readyState] || 'unknown', readyState },
+  });
 });
 
-// Single-origin frontend hosting
-app.use(express.static(path.join(FRONTEND_PATH, 'public')));
-app.use(express.static(FRONTEND_PATH));
-app.get('*', (req, res) => {
-  res.sendFile(path.join(FRONTEND_PATH, 'index.html'));
-});
+// Single-origin frontend hosting.
+// The frontend is optional in this deployment (production hosts it on Vercel),
+// so only mount the static files + SPA fallback when frontend/index.html is
+// actually present. Without this guard, backend-only deployments would return
+// 500 (missing index.html) instead of 404 for unknown paths.
+const FRONTEND_INDEX = path.join(FRONTEND_PATH, 'index.html');
+const serveFrontend =
+  process.env.SERVE_FRONTEND !== 'false' && fs.existsSync(FRONTEND_INDEX);
+
+if (serveFrontend) {
+  app.use(express.static(path.join(FRONTEND_PATH, 'public')));
+  app.use(express.static(FRONTEND_PATH));
+  app.get('*', (req, res) => {
+    res.sendFile(FRONTEND_INDEX);
+  });
+} else {
+  console.log('ℹ️  Frontend not bundled (backend-only mode) — serving API routes only');
+}
 
 // Initialize Socket.IO
 const io = new Server(server, {

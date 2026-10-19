@@ -1,0 +1,28 @@
+# ── Build context exclusions ─────────────────────────────────────────────────
+# These files/dirs are NOT sent to the Docker daemon during build.
+
+node_modules/
+npm-debug.log*
+
+# Secrets — never bake environment files into the image
+.env
+.env.*
+!.env.example
+
+# Local scratch / test scripts
+scratch/
+
+# Source control
+.git/
+.gitignore
+
+# Documentation
+*.md
+README*
+AGENTS.md
+CLAUDE.md
+
+# OS / editor noise
+.DS_Store
+.vscode/
+.idea/

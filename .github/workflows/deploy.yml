@@ -1,0 +1,73 @@
+name: Deploy Backend to Oracle Cloud
+
+# ── Trigger ───────────────────────────────────────────────────────────────────
+# MANUAL ONLY for now. After the first server-side setup is complete and the
+# deploy has been validated, uncomment the `push` block below to deploy on
+# every push to main.
+on:
+  workflow_dispatch:
+  # push:
+  #   branches:
+  #     - main
+  #   paths:
+  #     - 'backend/**'
+  #     - 'scripts/**'
+  #     - 'docker-compose.prod.yml'
+  #     - '.github/workflows/deploy.yml'
+
+jobs:
+  deploy:
+    name: Deploy to Oracle Cloud
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Deploy via SSH & Rsync
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY || secrets.ORACLE_SSH_KEY }}
+          SERVER_HOST: ${{ secrets.SERVER_HOST || secrets.ORACLE_HOST }}
+        run: |
+          if [ -z "$SSH_PRIVATE_KEY" ]; then
+            echo "❌ Error: SSH_PRIVATE_KEY (or ORACLE_SSH_KEY) secret is missing in GitHub repository settings."
+            echo "Please add your SSH private key under Settings > Secrets and variables > Actions > SSH_PRIVATE_KEY"
+            exit 1
+          fi
+          if [ -z "$SERVER_HOST" ]; then
+            echo "❌ Error: SERVER_HOST (or ORACLE_HOST) secret is missing."
+            exit 1
+          fi
+
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          # Never leave the private key on the runner longer than needed.
+          trap 'rm -f ~/.ssh/deploy_key' EXIT
+          ssh-keyscan -H "$SERVER_HOST" >> ~/.ssh/known_hosts
+
+          echo "📁 Ensuring deploy directory exists..."
+          ssh -i ~/.ssh/deploy_key ubuntu@"$SERVER_HOST" \
+            'mkdir -p /opt/apps/live-location-tracker'
+
+          echo "🚀 Syncing backend files to server..."
+          rsync -avz --delete \
+            --exclude 'node_modules' \
+            --exclude '.env' \
+            --exclude '.env.*' \
+            --exclude 'scratch' \
+            --exclude '*.md' \
+            --exclude 'README*' \
+            -e "ssh -i ~/.ssh/deploy_key" \
+            backend/ ubuntu@"$SERVER_HOST":/opt/apps/live-location-tracker/backend/
+
+          echo "🚀 Syncing compose + scripts (no delete — never touches .env)..."
+          rsync -avz \
+            -e "ssh -i ~/.ssh/deploy_key" \
+            docker-compose.prod.yml scripts ubuntu@"$SERVER_HOST":/opt/apps/live-location-tracker/
+
+          echo "🔄 Running deployment script on server..."
+          ssh -i ~/.ssh/deploy_key ubuntu@"$SERVER_HOST" '
+            cd /opt/apps/live-location-tracker
+            chmod +x scripts/deploy.sh
+            ./scripts/deploy.sh
+          '
