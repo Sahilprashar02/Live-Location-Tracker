@@ -11,6 +11,7 @@ on:
     paths:
       - 'backend/**'
       - 'scripts/**'
+      - 'deploy/**'
       - 'docker-compose.prod.yml'
       - '.github/workflows/deploy.yml'
 
@@ -59,14 +60,14 @@ jobs:
             -e "ssh -i ~/.ssh/deploy_key" \
             backend/ ubuntu@"$SERVER_HOST":/opt/apps/live-location-tracker/backend/
 
-          echo "🚀 Syncing compose + scripts (no delete — never touches .env)..."
+          echo "🚀 Syncing compose + scripts + tracked nginx config (no delete — never touches .env)..."
           rsync -avz \
             -e "ssh -i ~/.ssh/deploy_key" \
-            docker-compose.prod.yml scripts ubuntu@"$SERVER_HOST":/opt/apps/live-location-tracker/
+            docker-compose.prod.yml scripts deploy ubuntu@"$SERVER_HOST":/opt/apps/live-location-tracker/
 
           echo "🔄 Running deployment script on server..."
           ssh -i ~/.ssh/deploy_key ubuntu@"$SERVER_HOST" '
             cd /opt/apps/live-location-tracker
-            chmod +x scripts/deploy.sh
+            chmod +x scripts/deploy.sh scripts/install-nginx-vhost.sh
             ./scripts/deploy.sh
           '

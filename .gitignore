@@ -1,10 +1,18 @@
 # Dependencies
 node_modules/
 
-# Environment
+# Environment — never commit real configuration
 .env
 .env.local
 .env.*.local
+.env.production
+.env.development
+.env.test
+.env.*.production
+.env.*.development
+.env.*.test
+!.env.example
+!.env.production.example
 
 # OS
 .DS_Store
@@ -27,3 +35,7 @@ pnpm-debug.log*
 dist/
 build/
 coverage/
+
+# Local-only scaffolding and scratch work
+docs-scaffold/
+backend/scratch/

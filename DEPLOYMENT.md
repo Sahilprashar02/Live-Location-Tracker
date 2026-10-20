@@ -5,7 +5,13 @@ infrastructure from the `Infra` repo. The **frontend is not part of this
 deployment** (it is hosted separately on Vercel).
 
 > Source of truth: `Dockerfile`, `docker-compose.prod.yml`, `scripts/deploy.sh`,
+> `scripts/install-nginx-vhost.sh`, `deploy/nginx/llt.conf`,
 > `scripts/server-setup.sh`, `/opt/apps/infra/*`.
+>
+> This is the original detailed runbook. The documentation index, security
+> notes, and troubleshooting live in [`docs/`](docs/README.md); see
+> [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for the same topology with the
+> verification checklist and rollback caveats.
 
 ---
 
@@ -23,16 +29,20 @@ llt-backend             (this project)           :5000 (no host port)
         └──► global-kafka     bootstrap global-kafka:9092 (shared, Infra)
 ```
 
-- **Public backend hostname:** `llt.140-245-27-200.sslip.io` (Let's Encrypt cert).
-  The browser does not use it for normal API calls: Vercel rewrites
-  `/auth/*` and `/api/*` to the backend (`frontend/vercel.json`), so the
-  address bar stays on `https://live-location-tracker-jade.vercel.app`.
-  Socket.IO cannot be proxied by Vercel rewrites, so it connects directly to
-  the backend host configured in `VITE_SOCKET_URL` (or `VITE_API_BASE`).
+- **Public backend hostname:** `llt.140-245-27-200.sslip.io` (TLS managed by the
+  shared `global-certbot`). The browser does not use it for normal API calls:
+  Vercel rewrites `/auth/*` and `/api/*` to the backend
+  (`frontend/vercel.json`), so the address bar stays on
+  `https://live-location-tracker-jade.vercel.app`. Socket.IO cannot be proxied
+  by Vercel rewrites, so it connects directly to the backend host configured in
+  `VITE_SOCKET_URL` (or `VITE_API_BASE`).
 - The backend container publishes **no host port**; global-nginx proxies to it
   over `platform-network`.
 - Socket.IO (polling → websocket) is proxied by `nginx/conf.d/llt.conf` with
-  the `Upgrade` headers and long read timeouts.
+  the `Upgrade` headers and long read timeouts. A reviewable copy is tracked at
+  `deploy/nginx/llt.conf`; `scripts/install-nginx-vhost.sh --check` compares it
+  with the installed file, while `CONFIRM=yes ... --apply` is the only path
+  that writes to shared nginx.
 
 ---
 
@@ -64,7 +74,8 @@ stateful volume of its own.
     ├── .env.production.example
     ├── docker-compose.prod.yml
     ├── backend/               app source + Dockerfile
-    └── scripts/{deploy.sh,server-setup.sh}
+    ├── deploy/nginx/llt.conf  tracked copy for review/install
+    └── scripts/{deploy.sh,install-nginx-vhost.sh,server-setup.sh}
 ```
 
 ---
@@ -126,13 +137,18 @@ Every deploy:
 ```bash
 cd /opt/apps/live-location-tracker
 ./scripts/deploy.sh          # build → up -d --force-recreate → health poll
+
+# Shared nginx vhost: compare first; apply only with explicit authorization.
+./scripts/install-nginx-vhost.sh --check
+# CONFIRM=yes ./scripts/install-nginx-vhost.sh --apply
 ```
 
 CI: `.github/workflows/deploy.yml` deploys automatically on pushes to `main`
-that touch `backend/**`, `scripts/**`, `docker-compose.prod.yml`, or the
-workflow itself. It can also be run manually (`workflow_dispatch`). It rsyncs
-`backend/`, `docker-compose.prod.yml` and `scripts/` to the server, then runs
-`scripts/deploy.sh`. Requires repo secrets:
+that touch `backend/**`, `scripts/**`, `deploy/**`, `docker-compose.prod.yml`,
+or the workflow itself. It can also be run manually (`workflow_dispatch`). It
+rsyncs `backend/`, `docker-compose.prod.yml`, `scripts/`, and the tracked
+`deploy/` config to the server, then runs `scripts/deploy.sh`. The nginx vhost
+is not installed or reloaded by CI. Requires repo secrets:
 
 - `SERVER_HOST` — the bare IP/hostname `140.245.27.200` (not the local SSH
   alias `oracle`, and no `ubuntu@` prefix).
@@ -174,11 +190,26 @@ that removes volumes — shared databases and Kafka data live in volumes.
 
 ## 9. Rollback
 
+There is no blue/green deploy and images are built as `llt-backend:latest`.
+Rollback means redeploying the previous commit:
+
 ```bash
-# rebuild from the previous commit on the server
+# Preferred: revert the bad commit on main and let CI redeploy.
+git revert <bad-commit>
+git push origin main
+```
+
+Only if the server directory is a git checkout **and has no local changes**,
+you can check out the previous commit there instead:
+
+```bash
 cd /opt/apps/live-location-tracker
-git checkout <previous-commit>   # or re-sync the previous backend/ via CI
+git status --short          # must be empty
+git checkout <previous-commit>
 ./scripts/deploy.sh
 ```
 
-Images are tagged `llt-backend:latest`; `deploy.sh` prunes only dangling images.
+`deploy.sh` prunes only dangling images; it never removes volumes. If the
+release changed a schema or index, read `docs/DATABASE.md` §8 first — there is
+no migration framework, so a code rollback may not match data already written
+by the newer code.

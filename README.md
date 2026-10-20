@@ -5,14 +5,14 @@
 <h1 align="center">Live Location Tracker</h1>
 
 <p align="center">
-  <b>A premium, real-time location sharing ecosystem built for high performance and scalability.</b>
+  <b>Real-time location sharing for small groups — live map, friends, guest links, and geofence alerts.</b>
 </p>
 
 <p align="center">
   <a href="https://live-location-tracker-jade.vercel.app/" target="_blank">
     <img alt="Live Demo" src="https://img.shields.io/badge/Live_Demo-Vercel-000000?style=for-the-badge&logo=vercel&logoColor=white">
   </a>
-  <img alt="Node.js" src="https://img.shields.io/badge/Node.js-18%2B-339933?style=for-the-badge&logo=node.js&logoColor=white">
+  <img alt="Node.js" src="https://img.shields.io/badge/Node.js-22%2B-339933?style=for-the-badge&logo=node.js&logoColor=white">
   <img alt="Express" src="https://img.shields.io/badge/Express-4-000000?style=for-the-badge&logo=express&logoColor=white">
   <img alt="Socket.IO" src="https://img.shields.io/badge/Socket.IO-4-010101?style=for-the-badge&logo=socketdotio&logoColor=white">
   <img alt="Kafka" src="https://img.shields.io/badge/Apache_Kafka-KRaft-231F20?style=for-the-badge&logo=apachekafka&logoColor=white">
@@ -24,45 +24,91 @@
 
 ## 🚀 Overview
 
-Live Location Tracker is a state-of-the-art real-time application that allows users to share their live GPS positions on an interactive, high-fidelity map. Built with a focus on modern aesthetics and distributed system principles, it leverages **Apache Kafka** to handle high-throughput location events, ensuring that the system remains responsive even with hundreds of concurrent users.
+Live Location Tracker is a browser-based, real-time location-sharing app.
+Signed-in users put their live GPS position on a Leaflet map, see accepted
+friends, issue time-limited share links for guests, and create enter/exit
+geofence alerts. It is built for small groups coordinating a trip or meetup;
+the same codebase is also a working reference for Socket.IO + Kafka + batched
+MongoDB writes.
+
+The backend is intentionally a **single Node process**. That keeps Socket.IO
+state and per-user rate limits simple; it also means the app does not claim
+horizontal scale. See [docs/PERFORMANCE.md](docs/PERFORMANCE.md) for the
+measured baseline and the scaling triggers.
 
 ### Why Kafka?
-Unlike traditional real-time apps that write to a database on every event (O(n) writes), this app uses Kafka to decouple the data flow:
-1. **Real-time Path**: Events are consumed by a broadcast worker and pushed to clients immediately via WebSockets.
-2. **Persistent Path**: A separate worker batches events and writes them to MongoDB in bulk, significantly reducing DB load.
+
+The location write path is decoupled from fan-out and persistence:
+
+1. **Real-time path** — a broadcast consumer reads the event and pushes it to
+   the owner, accepted friends, and active share rooms over Socket.IO.
+2. **Persistence path** — a separate consumer buffers events and writes them
+   to MongoDB in batches of up to 50 (or every 5 seconds).
+
+Kafka is on the location path only. Auth, friends, geofences, and share-link
+creation are synchronous HTTP + MongoDB operations.
 
 ---
 
 ## ✨ Features
 
-- **🔐 Dual-Mode Authentication**: Seamlessly supports both **Google OAuth 2.0** sessions and **JWT-based** authentication for cross-domain and mobile compatibility.
-- **🛰️ High-Precision Tracking**: Uses browser Geolocation API with high-accuracy settings for precise movement.
-- **🗺️ Premium Dark Interface**: A sleek, glassmorphic UI built with Vanilla CSS and Leaflet.js, featuring CartoDB Dark Matter tiles.
-- **🛣️ OSRM Multi-Profile Routing**: Calculates turn-by-turn routing with free, unlimited OSRM profiles for Driving, Walking, and Cycling.
-- **🌡️ Live Geolocation Weather**: Continuous weather tracking using the free **Open-Meteo API** (cached for 5 mins) to display local conditions and temperature directly beside your username.
-- **⛽🏥 Explore Nearby POIs**: Google Maps-style quick filters (Petrol, Hospitals, Food) that query OSM Nominatim to fetch and overlay POI markers in the current map bounds.
-- **🎯 Interactive POI Directions**: Click any nearby POI pin to open a popup and request directions to it instantly.
-- **🔍 Smart Autocomplete & Viewbox Bias**: Instant place suggestions container beneath directions inputs, localized via Leaflet bounding box biasing (`viewbox`) and restricted to India (`countrycodes=in`).
-- **💡 Robust Geocode Fallback Parser**: Automatically strips building/house prefixes and cleans common road suffixes (e.g. `rd`, `road`, `st`, `street`) to resolve OpenStreetMap Nominatim's strict keyword index mismatching.
-- **🔄 Dynamic Auto-Re-routing**: Tracks GPS coordinates dynamically. If a route starting point is `"Your location"`, the app automatically recalculates and redraws the path whenever you travel more than **15 meters**.
-- **🎨 Lucide-Style SVG Icons**: Legacy emojis and low-fidelity unicode characters upgraded to clean, responsive inline SVGs with smooth CSS transitions and hover states.
-- **👥 Intelligent Multi-Session Support**: Refactored socket logic allows users to be logged in from multiple tabs or devices simultaneously without session clashing.
-- **⚡ Event-Driven Architecture**: Powered by Apache Kafka (KRaft mode) for professional-grade event streaming.
-- **💾 Batch Persistence**: Efficient MongoDB write-buffering via dedicated Kafka consumers.
-- **📱 Fully Responsive**: Realignment of all sidebars, search containers, status bars, and floating headers. Optimized for desktop and mobile navigation.
+- **🔐 Google sign-in** — OAuth 2.0 via Passport, plus a 24-hour JWT for the
+  cross-domain Vercel + backend setup.
+- **🛰️ Live GPS tracking** — browser Geolocation API with high-accuracy
+  `watchPosition`; the client sends at most once every 5 seconds and the
+  server enforces a 3-second per-user limit.
+- **🗺️ Five basemaps** — keyless Esri World Dark/Light Gray Canvas for the dark
+  UI, OpenStreetMap Standard, Esri Satellite, and OpenTopoMap Terrain. The
+  choice is remembered locally.
+- **🛣️ OSRM routing** — driving, walking, and cycling profiles, route steps,
+  and auto-reroute after moving more than 15 m. The public OSRM servers have no
+  SLA; see the integration notes.
+- **🌡️ Live weather** — current conditions from Open-Meteo, cached for 5
+  minutes beside the username. Failure is silent and graceful.
+- **⛽🏥 Explore nearby POIs** — Petrol, Hospital, and Food filters query
+  Nominatim within the current map bounds and overlay the results.
+- **🔍 Search with viewbox bias** — instant place suggestions, restricted to
+  India (`countrycodes=in`) with a Leaflet bounding-box bias.
+- **💡 Geocode fallback** — drops leading building components and strips common
+  road suffixes before retrying Nominatim.
+- **🔄 Auto-rerouting** — recalculates a route from “Your location” when the
+  user moves more than 15 m.
+- **👥 Multi-session support** — a user can be connected from several tabs or
+  devices without one tab disconnecting the others.
+- **🔗 Share links and QR codes** — `1h`, `8h`, or `forever` links open at
+  `/track/:code`; guests need no account and receive live updates.
+- **🤝 Friends** — request by email, accept/remove, and only accepted friends
+  receive each other's positions.
+- **📍 Geofence alerts** — enter, exit, or both, for accepted friends; a
+  connected owner gets an in-app toast, and a browser notification fires if
+  permission was granted.
+- **⚡ Kafka + batched MongoDB writes** — the broadcast and persistence
+  consumers run independently; `eventId` makes retries idempotent.
+- **📱 Responsive** — floating glass panels on desktop, bottom sheets and a
+  four-button nav on mobile.
+- **📲 Installable PWA** — manifest and service worker cache the app shell and
+  map tiles. The worker also caches same-origin API GETs; see
+  [docs/SECURITY.md](docs/SECURITY.md) before relying on logout on a shared
+  device.
 
 ---
 
 ## 🛠️ Tech Stack
 
-- **Frontend**: HTML5, Vanilla CSS (Glassmorphism), JavaScript (ESM)
-- **Maps, Routing & APIs**: Leaflet.js, CartoDB Tiles, OSRM (Open Source Routing Machine), OSM Nominatim Geocoding, Open-Meteo API
-- **Backend**: Node.js, Express
-- **Real-time**: Socket.IO 4.x
-- **Messaging**: Apache Kafka (kafkajs)
-- **Database**: MongoDB (Mongoose)
-- **Auth**: Passport.js, JWT (jsonwebtoken)
-- **Deployment**: Render (Backend), Vercel (Frontend), MongoDB Atlas, Confluent/Upstash Kafka
+- **Frontend**: HTML5, hand-written CSS (glassmorphism), vanilla JavaScript ES
+  modules, Vite 5 for the static build
+- **Maps, routing & APIs**: Leaflet 1.9.4, Esri ArcGIS tiles, OpenStreetMap,
+  OpenTopoMap, OSRM, Nominatim, Open-Meteo
+- **Backend**: Node.js 22, Express 4, Socket.IO 4
+- **Messaging**: Apache Kafka 3.9 (KRaft) via KafkaJS
+- **Database**: MongoDB 7 via Mongoose 8
+- **Auth**: Passport.js (Google OAuth 2.0) + JWT (`jsonwebtoken`)
+- **Deployment**: Oracle Cloud (backend Docker container behind shared nginx)
+  + Vercel (static frontend), with shared MongoDB and Kafka
+
+Exact installed versions and the deployment topology are in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and
+[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ---
 
@@ -70,89 +116,157 @@ Unlike traditional real-time apps that write to a database on every event (O(n) 
 
 ```mermaid
 flowchart TD
-    subgraph Client
-        Browser[User Browser]
-        Mobile[Mobile Device]
+    subgraph Browser
+        UI[Vanilla JS + Leaflet]
     end
 
-    subgraph API_Layer
-        Express[Express Server]
-        SocketIO[Socket.IO Manager]
+    subgraph Vercel
+        Static[Static build]
+        Rewrite[/auth/* and /api/* rewrites/]
     end
 
-    subgraph Event_Streaming
-        Kafka[(Kafka Topic: location-updates)]
+    subgraph Oracle["Oracle Cloud (shared host)"]
+        Proxy[global-nginx TLS]
+        API[llt-backend<br/>Express + Socket.IO]
+        Mongo[(global-mongodb)]
+        Kafka[(global-kafka<br/>location-updates)]
     end
 
-    subgraph Workers
-        Broadcaster[Broadcast Consumer]
-        DBWriter[DB Batch Consumer]
-    end
-
-    Client -->|JWT / Session| API_Layer
-    SocketIO -->|Produce Location| Kafka
-    Kafka -->|Stream| Broadcaster
-    Kafka -->|Batch| DBWriter
-    Broadcaster -->|Push Update| SocketIO
-    SocketIO -->|Real-time UI| Client
-    DBWriter -->|Bulk Insert| MongoDB[(MongoDB Atlas)]
+    UI -->|HTTPS page| Static
+    UI -->|HTTPS /auth,/api| Rewrite
+    Rewrite --> Proxy
+    UI -->|WSS Socket.IO| Proxy
+    Proxy --> API
+    API -->|Mongoose| Mongo
+    API -->|produce| Kafka
+    Kafka -->|broadcast-group| API
+    Kafka -->|db-processor-group| API
+    API -->|location-update| UI
 ```
+
+HTTP is same-origin through Vercel rewrites. Socket.IO connects directly to
+the backend because Vercel cannot carry the WebSocket upgrade.
 
 ---
 
 ## 🏁 Getting Started
 
 ### Prerequisites
-- Node.js 18+
-- Docker & Docker Compose (for local Kafka/Mongo)
-- Google Cloud Project with OAuth 2.0 Credentials
 
-### Installation
+- **Node.js 22+** (the production image is `node:22-alpine`)
+- **Docker & Docker Compose** for local Kafka and MongoDB
+- A **Google Cloud project** with OAuth 2.0 credentials
 
-1. **Clone & Setup Infrastructure**:
-   ```bash
-   docker compose up -d
-   ```
+### 1. Start local infrastructure
 
-2. **Install Backend Dependencies**:
-   ```bash
-   cd backend
-   npm install
-   ```
+```bash
+docker compose up -d
+```
 
-3. **Configure Environment**:
-   Create a `.env` file in the `backend` directory:
-   ```env
-   GOOGLE_CLIENT_ID=your_id
-   GOOGLE_CLIENT_SECRET=your_secret
-   SESSION_SECRET=your_random_secret
-   MONGODB_URI=mongodb://localhost:27018/location-tracker
-   KAFKA_BROKER=localhost:9092
-   PORT=3000
-   ```
+This starts Kafka on `localhost:9092` and MongoDB on `localhost:27018`.
+Both are project-local containers, separate from production.
 
-4. **Run the App**:
-   ```bash
-   npm run dev
-   ```
+### 2. Install backend dependencies
+
+```bash
+cd backend
+npm install
+```
+
+### 3. Configure `backend/.env`
+
+```env
+GOOGLE_CLIENT_ID=your_id
+GOOGLE_CLIENT_SECRET=your_secret
+SESSION_SECRET=your_random_secret
+MONGODB_URI=mongodb://localhost:27018/location-tracker
+KAFKA_BROKER=localhost:9092
+PORT=3000
+CLIENT_URL=http://localhost:3000
+
+# Optional locally; defaults to /auth/google/callback on the backend origin.
+# GOOGLE_CALLBACK_URL=http://localhost:3000/auth/google/callback
+```
+
+For local Google sign-in, register this exact authorized redirect URI:
+
+```text
+http://localhost:3000/auth/google/callback
+```
+
+Never commit the `.env` file. See
+[docs/ENVIRONMENT.md](docs/ENVIRONMENT.md) for every variable and what breaks
+without it.
+
+### 4. Run the app
+
+```bash
+npm run dev
+```
+
+Open <http://localhost:3000>. The backend serves the static frontend in local
+development.
+
+### Optional: Vite dev server
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Set `CLIENT_URL=http://localhost:5173` in `backend/.env` so CORS and Socket.IO
+allow the Vite origin. The backend must still be running on `:3000`.
+
+### Production
+
+The backend runs as `llt-backend` on Oracle Cloud; the frontend is deployed by
+Vercel. Pushes to `main` that touch `backend/**`, `scripts/**`,
+`docker-compose.prod.yml`, or the deploy workflow trigger the backend deploy.
+The constraints, health checks, rollback, and required GitHub secrets are in
+[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
+---
+
+## 📚 Documentation
+
+The full documentation system lives in [`docs/`](docs/README.md):
+
+| Start with | Why |
+|---|---|
+| [docs/README.md](docs/README.md) | Index, reading order, and known doc/code conflicts |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Runtime model, data flow, and key decisions |
+| [docs/API.md](docs/API.md) | Every endpoint and socket event |
+| [docs/DATABASE.md](docs/DATABASE.md) | Models, indexes, TTL, and schema hazards |
+| [docs/SECURITY.md](docs/SECURITY.md) | Controls and verified gaps |
+| [docs/TESTING.md](docs/TESTING.md) | What can actually be verified (there is no test suite) |
+| [AGENTS.md](AGENTS.md) | Mandatory rules for AI coding agents |
 
 ---
 
 ## 🛠️ Troubleshooting
 
-| Issue | Potential Solution |
+| Issue | Potential solution |
 | --- | --- |
-| **"Connection failed"** | Your JWT or Session has expired. Try logging out and signing in with Google again. |
-| **"Reconnecting..."** | The backend server is unreachable. Check if the Node process or Render service is active. |
-| **Map is blank** | Ensure you have an active internet connection to load Leaflet tiles. |
-| **Location not moving** | Make sure you've clicked **"Share Location"** and granted browser permissions. |
-| **Kafka errors** | Ensure Docker is running or your Kafka broker address is correct. |
+| **“Connection failed” / sent back to login** | The JWT or session expired. Sign in with Google again. |
+| **“Reconnecting…”** | The backend or Socket.IO is unreachable. Check the backend container and `VITE_API_BASE`/`VITE_SOCKET_URL`. In production, Socket.IO must connect directly to the backend origin, not Vercel. |
+| **Map is blank** | Check the tile provider and the Leaflet CDN in the browser Network tab. Try switching basemaps. |
+| **Location not moving** | Click **Share Location** and grant browser permission. The client sends at most once every 5 seconds. |
+| **Kafka errors** | Ensure `docker compose up -d` is running locally, or `global-kafka` is healthy on the server. Kafka failure does not stop HTTP, but live updates and history stop. |
+| **Google `redirect_uri_mismatch`** | Register the exact callback URI (`http://localhost:3000/auth/google/callback` locally, `https://live-location-tracker-jade.vercel.app/auth/google/callback` in production) and check `GOOGLE_CALLBACK_URL`. |
+| **Share link shows “inactive or expired”** | The link was stopped or its `expiresAt` passed. An active link whose owner has no point left after the 24-hour history TTL loads without a marker, not as inactive. |
+| **Local `npm run build` fails on `@rollup/rollup-*`** | The local optional dependency is incomplete; reinstall `frontend/node_modules` consistently. Vercel builds the same source successfully. |
+
+Symptom-by-symptom diagnostics:
+[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 
 ---
 
 ## 📜 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT, as declared in `backend/package.json`. **No `LICENSE` file is currently
+tracked in this repository**; add one before redistributing if a standalone
+license text is required.
 
 ---
 
