@@ -23,7 +23,12 @@ llt-backend             (this project)           :5000 (no host port)
         └──► global-kafka     bootstrap global-kafka:9092 (shared, Infra)
 ```
 
-- **Public hostname:** `llt.140-245-27-200.sslip.io` (Let's Encrypt cert).
+- **Public backend hostname:** `llt.140-245-27-200.sslip.io` (Let's Encrypt cert).
+  The browser does not use it for normal API calls: Vercel rewrites
+  `/auth/*` and `/api/*` to the backend (`frontend/vercel.json`), so the
+  address bar stays on `https://live-location-tracker-jade.vercel.app`.
+  Socket.IO cannot be proxied by Vercel rewrites, so it connects directly to
+  the backend host configured in `VITE_SOCKET_URL` (or `VITE_API_BASE`).
 - The backend container publishes **no host port**; global-nginx proxies to it
   over `platform-network`.
 - Socket.IO (polling → websocket) is proxied by `nginx/conf.d/llt.conf` with
@@ -78,12 +83,14 @@ stateful volume of its own.
 | `MONGODB_URI` | `mongodb://location_tracker_user:****@global-mongodb:27017/location_tracker?authSource=location_tracker` |
 | `KAFKA_BROKER` | `global-kafka:9092` |
 | `SESSION_SECRET` | random (`openssl rand -hex 32`) |
+| `GOOGLE_CALLBACK_URL` | `https://live-location-tracker-jade.vercel.app/auth/google/callback` |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth credentials |
 
-Register this exact redirect URI in Google Cloud Console:
+Register this exact redirect URI in Google Cloud Console (it stays on the
+Vercel domain; the `/auth/*` rewrite proxies it to the backend):
 
 ```
-https://llt.140-245-27-200.sslip.io/auth/google/callback
+https://live-location-tracker-jade.vercel.app/auth/google/callback
 ```
 
 ---
@@ -150,9 +157,12 @@ that removes volumes — shared databases and Kafka data live in volumes.
 
 ## 8. Manual / out-of-scope steps
 
-- Add the Google OAuth redirect URI above.
-- Rebuild the Vercel frontend with `VITE_API_BASE=https://llt.140-245-27-200.sslip.io`
-  (the frontend currently targets `window.location.origin`).
+- Add the Google OAuth redirect URI above and set `GOOGLE_CALLBACK_URL` in
+  the server `.env`.
+- Vercel project (frontend) env: keep
+  `VITE_API_BASE=https://llt.140-245-27-200.sslip.io` (used for Socket.IO) or
+  set `VITE_SOCKET_URL` explicitly. HTTP calls are same-origin and use
+  `frontend/vercel.json` rewrites; no other frontend env is required.
 - Switch the CI workflow from manual to push-triggered once validated.
 
 ---

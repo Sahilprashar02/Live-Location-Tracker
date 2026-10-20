@@ -7,7 +7,9 @@ passport.use(
     {
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: '/auth/google/callback',
+      // In production this points at the Vercel domain so the OAuth callback
+      // is proxied by a Vercel rewrite and the backend host stays hidden.
+      callbackURL: process.env.GOOGLE_CALLBACK_URL || '/auth/google/callback',
     },
     async (accessToken, refreshToken, profile, done) => {
       try {

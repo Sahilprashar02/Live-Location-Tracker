@@ -5,6 +5,15 @@ export const SocketManager = (() => {
   let socket = null;
   let isConnected = false;
 
+  // Socket.IO cannot be proxied by Vercel rewrites, so it connects directly
+  // to the backend origin. HTTP calls use the frontend origin instead (see
+  // auth.js + frontend/vercel.json).
+  const getSocketUrl = () => {
+    const env = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env : {};
+    const isLocalDev = window.location.hostname === 'localhost' && window.location.port !== '3000';
+    return env.VITE_SOCKET_URL || env.VITE_API_BASE || (isLocalDev ? 'http://localhost:3000' : window.location.origin);
+  };
+
   // Callbacks set by app.js
   let onLocationUpdate = null;
   let onUserDisconnected = null;
@@ -26,16 +35,9 @@ export const SocketManager = (() => {
     onError = callbacks.onError || (() => {});
     onGeofenceAlert = callbacks.onGeofenceAlert || (() => {});
 
-    // Safe check for Vite environment variables
-    const API_BASE = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE)
-      ? import.meta.env.VITE_API_BASE
-      : (window.location.hostname === 'localhost' && window.location.port !== '3000'
-        ? 'http://localhost:3000'
-        : window.location.origin);
-
     const token = localStorage.getItem('auth_token');
 
-    socket = io(API_BASE, {
+    socket = io(getSocketUrl(), {
       auth: { token },
       withCredentials: true,
       transports: ['websocket', 'polling'],
@@ -120,12 +122,7 @@ export const SocketManager = (() => {
   const getStatus = () => isConnected;
 
   const connectShare = (shareCode, callbacks = {}) => {
-    const API_BASE = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE)
-      ? import.meta.env.VITE_API_BASE
-      : (window.location.hostname === 'localhost' && window.location.port !== '3000'
-        ? 'http://localhost:3000'
-        : window.location.origin);
-    socket = io(API_BASE, {
+    socket = io(getSocketUrl(), {
       auth: { shareCode },
       transports: ['websocket', 'polling'],
     });

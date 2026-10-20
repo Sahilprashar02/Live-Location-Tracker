@@ -2,12 +2,12 @@
  * auth.js — Authentication UI logic
  */
 export const AuthManager = (() => {
-  // Safe check for Vite environment variables
-  const API_BASE = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE)
-    ? import.meta.env.VITE_API_BASE
-    : (window.location.hostname === 'localhost' && window.location.port !== '3000'
-      ? 'http://localhost:3000'
-      : window.location.origin);
+  // HTTP calls stay on the frontend origin in production. Vercel rewrites
+  // /auth/* and /api/* to the backend (see frontend/vercel.json), so the
+  // browser never navigates to the backend host. Local Vite dev talks to the
+  // local backend directly.
+  const isLocalDev = window.location.hostname === 'localhost' && window.location.port !== '3000';
+  const API_BASE = isLocalDev ? 'http://localhost:3000' : '';
 
   const getAuthHeaders = () => {
     const token = localStorage.getItem('auth_token');
