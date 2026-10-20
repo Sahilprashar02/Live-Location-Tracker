@@ -239,13 +239,33 @@ Kafka lag above 1000 messages.
 There is no notification receiver configured yet: alerts are visible in the
 Prometheus/Grafana UIs but are not delivered by email, Slack, or PagerDuty.
 
+### 7.2 Bounded HTTP load probe (2026-10-20)
+
+A one-off probe ran 2,000 requests against
+`https://llt.140-245-27-200.sslip.io/health` with 50 concurrent workers, using a
+Node 22 client container capped at 1 vCPU and HTTP keep-alive:
+
+| Metric | Result |
+|---|---|
+| Responses | `2000/2000` HTTP `200` |
+| Throughput | `634.52 req/s` |
+| Average | `77.6 ms` |
+| p50 / p95 / p99 | `69.1 ms` / `143.2 ms` / `187.4 ms` |
+| Max | `206.6 ms` |
+
+This exercises nginx TLS/HTTP, the Express health handler, and the MongoDB
+readiness check. It does **not** exercise authenticated Socket.IO sessions,
+location writes, Kafka fan-out, or geofence queries, so it does not establish a
+socket-capacity threshold. A separate authenticated socket/load test is still
+required before changing replica counts or Kafka partitions.
+
 ---
 
 ## 8. Remaining Risks
 
 | # | Risk | Mitigation | Status |
 |---|---|---|---|
-| 1 | No load test or real-user baseline | Run a staged socket/HTTP load test against a disposable environment | **Open** — idle baseline only |
+| 1 | No load test or real-user baseline | Bounded HTTP health probe passed; authenticated socket/load test still required | **Partially mitigated** |
 | 2 | Single Node process cannot scale horizontally | Add a Socket.IO Redis adapter + sticky sessions + shared rate limiter before replicas | Open |
 | 3 | One Kafka partition limits consumer parallelism | Review partitions and consumer group design before increasing | Open |
 | 4 | Per-event friend/share/geofence queries | Compound indexes added; real-data plan and event-rate measurement still needed | **Open** — indexes added, unmeasured |

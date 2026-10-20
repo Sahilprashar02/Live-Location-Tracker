@@ -45,7 +45,8 @@ Commit `52341f2`. Deploy restarted `llt-backend` at `14:55:13 UTC`; `/health`
 returned `200`, the internal metrics endpoint returned Prometheus text, and
 `https://llt.140-245-27-200.sslip.io/metrics` returned `404`. Prometheus target
 `llt-backend` is `up`; `kafka-exporter` reports zero lag for both consumer
-groups. No load test was run.
+groups. A bounded HTTP health probe handled 2,000/2,000 requests at 634.52 req/s
+with p95 143.2 ms; no authenticated Socket.IO load test was run.
 
 ## 2026-10-20 — Compound indexes for per-event lookups
 

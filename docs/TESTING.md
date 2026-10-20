@@ -86,6 +86,7 @@ live site serves a hashed bundle. Treat the local build as **unverified** until
 | Public metrics block | `GET https://llt.140-245-27-200.sslip.io/metrics` | `404`; nginx does not proxy the metrics endpoint |
 | Prometheus target | Prometheus `/api/v1/targets` | `llt-backend` is `up` |
 | Kafka lag exporter | Prometheus `kafka_consumergroup_lag` | `broadcast-group` and `db-processor-group` both report `0` |
+| Bounded HTTP load | 2,000 `GET /health`, 50 concurrent, Node client capped at 1 vCPU | `2000/2000` `200`; `634.52 req/s`; p95 `143.2 ms` |
 | HTTP to HTTPS | `GET http://llt.140-245-27-200.sslip.io/health` | `301` to the HTTPS URL |
 | Public TLS | `GET https://llt.140-245-27-200.sslip.io/health` | `200`, certificate verified (`ssl_verify_result=0`), HTTP/2 |
 | WebSocket upgrade through nginx | `wss://llt.140-245-27-200.sslip.io/socket.io/?EIO=4&transport=websocket` | `101 Switching Protocols`, Engine.IO open packet |
