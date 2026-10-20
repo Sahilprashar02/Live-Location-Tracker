@@ -78,6 +78,7 @@ Live Location Tracker/
 │   ├── .env.example              Local backend variable template
 │   └── src/
 │       ├── server.js             Express + session + Socket.IO + bootstrap
+│       ├── metrics.js            Prometheus registry + `/metrics` handler
 │       ├── config/
 │       │   ├── db.js             Mongoose connection
 │       │   ├── kafka.js          Kafka client, producer, consumers, topic

@@ -53,6 +53,7 @@ duration, and geofence fields as untrusted input.
 | S20 | Vercel adds `Cache-Control: no-store` to `/auth/*` and `/api/*` | `frontend/vercel.json` | VERIFIED |
 | S21 | Vercel sends HSTS (`max-age=63072000; includeSubDomains; preload`) | live response headers | VERIFIED |
 | S22 | nginx adds `X-Frame-Options: SAMEORIGIN`, `X-Content-Type-Options: nosniff`, `X-XSS-Protection`, and `Referrer-Policy` | live response headers | VERIFIED |
+| S23 | `/metrics` is scraped only over `platform-network`; the public nginx vhost returns `404` and the backend publishes no host port | `Infra/nginx/conf.d/llt.conf`, `docker-compose.prod.yml` | VERIFIED |
 
 “Verified” here means the code or a live response was inspected. It does not
 mean an independent penetration test was performed.
