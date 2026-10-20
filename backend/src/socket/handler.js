@@ -220,32 +220,25 @@ const initSocketHandler = (io) => {
     });
   });
 
-  // Periodic cleanup of stale sockets (no update in 30 seconds)
+  // Safety net for sockets that disappeared without firing 'disconnect'.
+  // Socket.IO's own ping/pong already detects dead connections; a live socket
+  // must never be disconnected just because sharing was paused (that caused
+  // the client to loop on "Reconnecting..." after ~30s of no location).
   setInterval(() => {
-    const now = Date.now();
-    const STALE_THRESHOLD = 30000; // 30 seconds
-
     for (const [socketId, info] of activeUsers.entries()) {
-      if (info.lastLocationAt && now - info.lastLocationAt > STALE_THRESHOLD) {
-        console.log(`🧹 Removing stale socket for user: ${info.displayName} (${socketId})`);
-        
-        activeUsers.delete(socketId);
-        
-        // Disconnect the specific stale socket
-        const staleSocket = io.sockets.sockets.get(socketId);
-        if (staleSocket) {
-          staleSocket.disconnect(true);
-        }
+      if (io.sockets.sockets.get(socketId)) continue;
 
-        // Check if user still has other active sockets
-        const hasOtherSockets = Array.from(activeUsers.values()).some(u => u.userId === info.userId);
-        if (!hasOtherSockets) {
-          rateLimitMap.delete(info.userId);
-          io.to('authenticated').emit('user-disconnected', { userId: info.userId });
-        }
+      console.log(`🧹 Removing orphaned socket entry for user: ${info.displayName} (${socketId})`);
+      activeUsers.delete(socketId);
+
+      // Check if user still has other active sockets
+      const hasOtherSockets = Array.from(activeUsers.values()).some(u => u.userId === info.userId);
+      if (!hasOtherSockets) {
+        rateLimitMap.delete(info.userId);
+        io.to('authenticated').emit('user-disconnected', { userId: info.userId });
       }
     }
-  }, 10000); // Check every 10 seconds
+  }, 30000);
 
   console.log('🔌 Socket.IO handler initialized');
 };

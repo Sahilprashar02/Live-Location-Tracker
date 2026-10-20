@@ -11,12 +11,14 @@ export const MapManager = (() => {
   const TILE_LAYERS = {
     dark: {
       name: 'Dark',
-      url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-      attr: '&copy; OpenStreetMap &copy; CARTO',
+      // Esri World Dark Gray Canvas — no API key required.
+      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+      attr: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ',
       icon: '🌙',
-      preview: 'https://a.basemaps.cartocdn.com/dark_all/6/32/21.png',
-      subdomains: 'abcd',
+      preview: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/6/21/32',
+      subdomains: [],
       maxZoom: 19,
+      maxNativeZoom: 16,
     },
     standard: {
       name: 'Standard',
@@ -47,12 +49,14 @@ export const MapManager = (() => {
     },
     light: {
       name: 'Light',
-      url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-      attr: '&copy; OpenStreetMap &copy; CARTO',
+      // Esri World Light Gray Canvas — no API key required.
+      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+      attr: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ',
       icon: '☀️',
-      preview: 'https://a.basemaps.cartocdn.com/light_all/6/32/21.png',
-      subdomains: 'abcd',
+      preview: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/6/21/32',
+      subdomains: [],
       maxZoom: 19,
+      maxNativeZoom: 16,
     },
   };
 
@@ -114,6 +118,9 @@ export const MapManager = (() => {
       attribution: layerConfig.attr,
       maxZoom: layerConfig.maxZoom,
     };
+    if (layerConfig.maxNativeZoom) {
+      tileOptions.maxNativeZoom = layerConfig.maxNativeZoom;
+    }
     if (layerConfig.subdomains && layerConfig.subdomains.length > 0) {
       tileOptions.subdomains = layerConfig.subdomains;
     }
@@ -198,6 +205,9 @@ export const MapManager = (() => {
       attribution: layerConfig.attr,
       maxZoom: layerConfig.maxZoom,
     };
+    if (layerConfig.maxNativeZoom) {
+      tileOptions.maxNativeZoom = layerConfig.maxNativeZoom;
+    }
     if (layerConfig.subdomains && layerConfig.subdomains.length > 0) {
       tileOptions.subdomains = layerConfig.subdomains;
     }
