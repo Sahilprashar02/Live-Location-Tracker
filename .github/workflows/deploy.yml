@@ -1,19 +1,18 @@
 name: Deploy Backend to Oracle Cloud
 
 # ── Trigger ───────────────────────────────────────────────────────────────────
-# MANUAL ONLY for now. After the first server-side setup is complete and the
-# deploy has been validated, uncomment the `push` block below to deploy on
-# every push to main.
+# Deploys on every push to main that touches the backend or deploy config.
+# Can also be run manually from the Actions tab.
 on:
   workflow_dispatch:
-  # push:
-  #   branches:
-  #     - main
-  #   paths:
-  #     - 'backend/**'
-  #     - 'scripts/**'
-  #     - 'docker-compose.prod.yml'
-  #     - '.github/workflows/deploy.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/**'
+      - 'scripts/**'
+      - 'docker-compose.prod.yml'
+      - '.github/workflows/deploy.yml'
 
 jobs:
   deploy:
