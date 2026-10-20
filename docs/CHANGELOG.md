@@ -21,6 +21,31 @@
 Newest first. Record real commits — a changelog written from memory drifts
 from the history within weeks.
 
+## 2026-10-20 — Compound indexes for per-event lookups
+
+**What changed**
+
+Added `Friend.{userId,status}`, `Friend.{friendId,status}`,
+`Geofence.{targetUserId,isActive}`, and
+`ShareSession.{ownerId,isActive,expiresAt}` indexes. The broadcast consumer now
+runs its accepted-friend and active-share queries concurrently with
+`Promise.all` instead of serially. Query shapes and API/socket contracts did not
+change.
+
+**Why**
+
+[PERFORMANCE.md](./PERFORMANCE.md) identified the per-event friend, geofence,
+and active-share lookups as missing compound indexes, and the two broadcast
+queries were serialized on every location event.
+
+**Evidence**
+
+Commit `6c58709`. The deploy restarted `llt-backend` at `14:08:50 UTC`;
+`getIndexes()` confirmed all four indexes, and `explain()` selected `IXSCAN`
+for each per-event query against empty collections. `GET /health` returned
+`200`; `GET /api/friends` returned `401` as expected. Real-data latency and
+throughput remain unmeasured.
+
 ## 2026-10-20 — Track nginx vhost and add a safe installer
 
 **What changed**

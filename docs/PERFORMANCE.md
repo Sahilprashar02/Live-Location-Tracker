@@ -90,13 +90,13 @@ This confirms the consumer groups are connected; it is not a throughput test.
 
 ### 3.4 MongoDB indexes and query plans
 
-Read-only checks before the index change at the same snapshot:
+Read-only `getIndexes()` after the index deploy at `14:08 UTC`:
 
 | Collection | Documents | Indexes present |
 |---|---|---|
-| `friends` | 0 | `_id`, `userId`, `friendId`, `status`, unique `userId+friendId` |
-| `sharesessions` | 0 | `_id`, unique `shareCode`, `ownerId`, `expiresAt`, `isActive` |
-| `geofences` | 0 | `_id`, `userId`, `targetUserId` |
+| `friends` | 0 | `_id`, `userId`, `friendId`, `status`, unique `userId+friendId`, `userId+status`, `friendId+status` |
+| `sharesessions` | 0 | `_id`, unique `shareCode`, `ownerId`, `expiresAt`, `isActive`, `ownerId+isActive+expiresAt` |
+| `geofences` | 0 | `_id`, `userId`, `targetUserId`, `targetUserId+isActive` |
 | `locationhistories` | 3 | `_id`, unique `eventId`, `userId+timestamp:-1`, TTL `timestamp` (86400 s) |
 | `users` | 1 | `_id`, unique `googleId` |
 
@@ -108,12 +108,19 @@ plan = LIMIT > FETCH > IXSCAN
 returned = 1, keys examined = 1, docs examined = 1, executionTimeMillis = 0
 ```
 
-The friend, active-share, and geofence lookup plans could **not** be measured:
-their collections are empty. Compound indexes matching those filters were added
-on 2026-10-20 (`Friend.{userId,status}`, `Friend.{friendId,status}`,
-`Geofence.{targetUserId,isActive}`, and
-`ShareSession.{ownerId,isActive,expiresAt}`), so the missing-index finding is
-addressed; real-data plan cost remains **UNKNOWN**.
+The per-event queries were explained against the empty collections. Each chose
+an index scan rather than a collection scan:
+
+```text
+Friend.find({ friendId, status: 'accepted' })         plan = FETCH > IXSCAN
+Friend.find({ userId, status: 'accepted' })           plan = FETCH > IXSCAN
+Geofence.find({ targetUserId, isActive: true })       plan = FETCH > IXSCAN
+ShareSession.find({ ownerId, isActive, expiresAt })   plan = FETCH > FETCH > IXSCAN
+```
+
+All four returned `keys=0, docs=0, ms=0` because the collections are empty.
+This proves index selection, not real-data latency. The missing-index finding is
+addressed; query cost under real data remains **UNKNOWN**.
 
 ### 3.5 Not measured
 
@@ -123,7 +130,7 @@ addressed; real-data plan cost remains **UNKNOWN**.
 | p50/p95/p99 API latency under load | **UNKNOWN** |
 | Socket event round-trip latency | **UNKNOWN** |
 | Kafka produce latency and consumer throughput | **UNKNOWN** |
-| Mongo query latency / `explain()` plans for friend/share/geofence queries | **UNKNOWN** — collections empty; only latest-location plan measured |
+| Mongo query latency / `explain()` plans for friend/share/geofence queries | Index selection verified with empty collections; real-data latency **UNKNOWN** |
 | Memory growth over hours/days | **UNKNOWN** |
 | Deploy duration (build/restart/health phases) | **UNKNOWN** in this document; the deploy script prints it per run |
 | Error rate | **UNKNOWN** |
@@ -147,12 +154,11 @@ findings (verified by reading the code) whose cost is **INFERRED**:
 | Kafka memory | 919 MiB / 2 GiB idle | live `docker stats` | Broker baseline/JVM heap; not app-specific |
 | Frontend | 5 s send throttle, 350 ms search debounce, 5 min weather cache | `app.js`, `search.js` | Client-side load control |
 
-Live `getIndexes()` on 2026-10-20 confirmed the old single-field index list.
-Compound indexes were added for `Friend.{userId,status}`,
-`Friend.{friendId,status}`, `Geofence.{targetUserId,isActive}`, and
-`ShareSession.{ownerId,isActive,expiresAt}`. The friend/share/geofence
-collections are empty, so the per-event query cost is still **UNKNOWN**; this
-change addresses index coverage, not the two-query fan-out itself.
+Live `getIndexes()` after the 2026-10-20 deploy confirmed all four compound
+indexes are installed. `explain()` selected `IXSCAN` for each per-event query,
+but the friend/share/geofence collections are empty, so real-data query cost is
+still **UNKNOWN**. The broadcast consumer now runs its two independent lookups
+concurrently; it still performs two queries per event.
 
 Kafka's idle memory is notable but is the shared broker's baseline, not an LLT
 leak. Do not reduce its limit without understanding the other projects using

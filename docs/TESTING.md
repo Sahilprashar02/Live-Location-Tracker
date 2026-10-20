@@ -79,6 +79,8 @@ live site serves a hashed bundle. Treat the local build as **unverified** until
 | Socket.IO polling handshake | `GET .../socket.io/?EIO=4&transport=polling` | `200`, Engine.IO open packet with `sid`, `upgrades:["websocket"]` |
 | nginx configuration | `docker exec global-nginx nginx -t` | syntax OK |
 | Tracked vhost parity | `scripts/install-nginx-vhost.sh --check` | `check=ok`; installed vhost matches `deploy/nginx/llt.conf` |
+| Compound indexes after deploy | `getIndexes()` on `friends`, `sharesessions`, `geofences` | `userId+status`, `friendId+status`, `targetUserId+isActive`, and `ownerId+isActive+expiresAt` present |
+| Per-event query plans | `explain()` against empty collections | `IXSCAN` selected for friend, geofence, and active-share queries |
 | Shared-network upstream | `docker exec global-nginx wget -qO- http://llt-backend:5000/health` | `200`, database connected |
 | HTTP to HTTPS | `GET http://llt.140-245-27-200.sslip.io/health` | `301` to the HTTPS URL |
 | Public TLS | `GET https://llt.140-245-27-200.sslip.io/health` | `200`, certificate verified (`ssl_verify_result=0`), HTTP/2 |

@@ -104,9 +104,10 @@ deleted by a TTL index. `GET /api/share/:code` returns 404 for them, and
 
 The per-event consumer and socket-handler queries now have compound indexes
 matching their filters. They were added on 2026-10-20 after the live
-`getIndexes()` check showed only the separate single-field indexes. Query-plan
-latency under real data is still **UNKNOWN** because `friends`,
-`sharesessions`, and `geofences` were empty when the change was made. See
+`getIndexes()` check showed only the separate single-field indexes. After the
+deploy, `getIndexes()` confirmed all four and `explain()` selected `IXSCAN` for
+each query. Those plans ran against empty `friends`, `sharesessions`, and
+`geofences` collections, so real-data query cost remains **UNKNOWN**. See
 [PERFORMANCE.md](./PERFORMANCE.md) §3.4.
 
 ---
@@ -128,8 +129,10 @@ latency under real data is still **UNKNOWN** because `friends`,
 | `LocationHistory.insertMany(batch, { ordered: false })` | `eventId` unique | Duplicate-key errors are expected on retry and handled |
 | `User.updateMany({ _id: { $in: ids } }, { lastSeen })` | `_id` | One write per batch |
 
-No `explain()` plans, profiler output, or production query timings are recorded.
-Treat the “index used” column as the intended index, not a measured plan.
+`explain()` plans were captured on 2026-10-20 for the per-event queries against
+empty collections; each selected `IXSCAN`. No real-data query timings, profiler
+output, or production p50/p95 are recorded. Treat the “index used” column as the
+intended index, not a latency measurement.
 
 ---
 
