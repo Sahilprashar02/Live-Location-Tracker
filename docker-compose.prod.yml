@@ -58,6 +58,8 @@ services:
       resources:
         limits:
           # Single persistent Node process (see Dockerfile header).
+          # CPU ceiling prevents a runaway event loop from consuming all 4 vCPU.
+          cpus: "1.0"
           memory: 1G
 
 # ─── External Network ────────────────────────────────────────────────────────

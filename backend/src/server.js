@@ -23,6 +23,7 @@ const { startDBConsumer, stopDBConsumer } = require('./consumers/dbConsumer');
 
 // Socket handler import
 const { initSocketHandler } = require('./socket/handler');
+const { metricsMiddleware, metricsHandler } = require('./metrics');
 
 const PORT = process.env.PORT || 3000;
 const FRONTEND_PATH = path.join(__dirname, '..', '..', 'frontend');
@@ -95,6 +96,7 @@ if (CLIENT_URL) {
 
 // Middleware
 app.use(express.json());
+app.use(metricsMiddleware);
 app.use(sessionMiddleware);
 app.use(passport.initialize());
 app.use(passport.session());
@@ -124,6 +126,10 @@ app.get('/health', (req, res) => {
     database: { status: READY_STATES[readyState] || 'unknown', readyState },
   });
 });
+
+// Prometheus metrics. This is scraped over the internal platform-network only;
+// the public nginx vhost returns 404 for /metrics.
+app.get('/metrics', metricsHandler);
 
 // Single-origin frontend hosting.
 // The frontend is optional in this deployment (production hosts it on Vercel),

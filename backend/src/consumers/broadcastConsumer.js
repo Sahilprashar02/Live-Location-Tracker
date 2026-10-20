@@ -1,6 +1,7 @@
 const { createConsumer, TOPIC } = require('../config/kafka');
 const ShareSession = require('../models/ShareSession');
 const Friend = require('../models/Friend');
+const metrics = require('../metrics');
 
 // Simple LRU-like dedup cache (max 10,000 entries)
 const processedEvents = new Map();
@@ -37,6 +38,7 @@ const startBroadcastConsumer = async (io) => {
       eachMessage: async ({ topic, partition, message }) => {
         try {
           const locationEvent = JSON.parse(message.value.toString());
+          metrics.locationEventsConsumed.inc({ consumer: 'broadcast' });
 
           // Deduplication check
           if (processedEvents.has(locationEvent.eventId)) {

@@ -2,6 +2,7 @@ const { v4: uuidv4 } = require('uuid');
 const { producer, TOPIC } = require('../config/kafka');
 const ShareSession = require('../models/ShareSession');
 const Geofence = require('../models/Geofence');
+const metrics = require('../metrics');
 
 // Track active users: socketId -> { userId, displayName, avatar, lastUpdate, lastLocationAt }
 const activeUsers = new Map();
@@ -75,6 +76,8 @@ const initSocketHandler = (io) => {
 
     // Track this socket as active
     activeUsers.set(socket.id, userInfo);
+    metrics.activeSockets.inc();
+    metrics.activeUsers.set(activeUsers.size);
 
     console.log(`🟢 User connected: ${user.displayName} (Socket: ${socket.id}, First: ${isFirstSocket})`);
 
@@ -103,6 +106,7 @@ const initSocketHandler = (io) => {
       try {
         // Validate location data
         if (!validateLocationData(data)) {
+          metrics.locationEventsDropped.inc({ reason: 'invalid' });
           socket.emit('error-message', { message: 'Invalid location data' });
           return;
         }
@@ -111,6 +115,7 @@ const initSocketHandler = (io) => {
         const lastEmit = rateLimitMap.get(userInfo.userId);
         const now = Date.now();
         if (lastEmit && now - lastEmit < RATE_LIMIT_MS) {
+          metrics.locationEventsDropped.inc({ reason: 'rate_limited' });
           return; // Silently drop — too frequent
         }
         rateLimitMap.set(userInfo.userId, now);
@@ -150,6 +155,7 @@ const initSocketHandler = (io) => {
             || (fence.triggerOn === 'exit' && nextState === 'outside');
 
           if (changed && triggerMatches) {
+            metrics.geofenceAlerts.inc();
             io.to(`user:${fence.userId}`).emit('geofence-alert', {
               geofenceId: fence._id,
               name: fence.name,
@@ -181,6 +187,7 @@ const initSocketHandler = (io) => {
             },
           ],
         });
+        metrics.locationEventsProduced.inc();
       } catch (error) {
         console.error(`❌ Error processing location from ${userInfo.displayName}:`, error.message);
         socket.emit('error-message', { message: 'Failed to process location' });
@@ -205,6 +212,8 @@ const initSocketHandler = (io) => {
       
       // Remove only this specific socket
       activeUsers.delete(socket.id);
+      metrics.activeSockets.dec();
+      metrics.activeUsers.set(activeUsers.size);
       
       // Check if the user has any other active sockets
       const hasOtherSockets = Array.from(activeUsers.values()).some(u => u.userId === userInfo.userId);
@@ -230,6 +239,8 @@ const initSocketHandler = (io) => {
 
       console.log(`🧹 Removing orphaned socket entry for user: ${info.displayName} (${socketId})`);
       activeUsers.delete(socketId);
+      metrics.activeSockets.dec();
+      metrics.activeUsers.set(activeUsers.size);
 
       // Check if user still has other active sockets
       const hasOtherSockets = Array.from(activeUsers.values()).some(u => u.userId === info.userId);

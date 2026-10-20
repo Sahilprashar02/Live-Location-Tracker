@@ -1,6 +1,7 @@
 const { createConsumer, TOPIC } = require('../config/kafka');
 const LocationHistory = require('../models/LocationHistory');
 const User = require('../models/User');
+const metrics = require('../metrics');
 
 // Batch buffer for efficient DB writes
 let writeBuffer = [];
@@ -72,6 +73,7 @@ const startDBConsumer = async () => {
       eachMessage: async ({ topic, partition, message }) => {
         try {
           const event = JSON.parse(message.value.toString());
+          metrics.locationEventsConsumed.inc({ consumer: 'db' });
 
           // Add to write buffer
           writeBuffer.push({

@@ -203,7 +203,7 @@ If you need a before/after, capture one now and record the versions.
 | Resource | Allowance | Consumption (idle snapshot) | Headroom |
 |---|---|---|---|
 | `llt-backend` memory | 1 GiB | 54.67 MiB | ~95% |
-| `llt-backend` CPU | 4 shared vCPU (no per-container CPU limit) | 1.50% | Large at idle; unknown under load |
+| `llt-backend` CPU | 1 vCPU ceiling (`docker update`, reapplied by Infra timer) | 1.50% | Large at idle; unknown under load |
 | `global-mongodb` memory | 4 GiB | 160.6 MiB | ~96% |
 | `global-kafka` memory | 2 GiB | 919.0 MiB | ~55% |
 | Host memory | 23 GiB | 3.0 GiB used + 19 GiB cache | ~20 GiB available |
@@ -213,6 +213,31 @@ If you need a before/after, capture one now and record the versions.
 The backend has lots of **memory** headroom but no **process/partition**
 headroom. Memory is not the first constraint; fan-out and per-event queries
 are.
+
+### 7.1 Observability
+
+The shared Oracle host now runs Prometheus, Grafana, node-exporter, cAdvisor,
+blackbox-exporter, and kafka-exporter on `platform-network`. Prometheus and
+Grafana publish loopback-only ports, so they are reached through an SSH tunnel,
+not the public internet.
+
+The LLT backend exposes `/metrics` on its internal container port. The public
+nginx vhost returns `404` for `/metrics`. The endpoint exports:
+
+- Node process/runtime metrics (CPU, memory, event-loop lag, GC, handles)
+- `llt_active_socket_connections` and `llt_active_users`
+- `llt_location_events_produced_total`, consumed totals by consumer, and
+  dropped totals by reason (`invalid`, `rate_limited`)
+- `llt_geofence_alerts_total`
+- `llt_http_request_duration_seconds` by method, route, and status
+
+Prometheus also scrapes cAdvisor for container CPU/memory and kafka-exporter
+for consumer-group lag. Alert rules cover target downtime, host CPU/memory/disk,
+container memory headroom, HTTP probe failure, LLT metrics endpoint failure, and
+Kafka lag above 1000 messages.
+
+There is no notification receiver configured yet: alerts are visible in the
+Prometheus/Grafana UIs but are not delivered by email, Slack, or PagerDuty.
 
 ---
 
@@ -224,12 +249,12 @@ are.
 | 2 | Single Node process cannot scale horizontally | Add a Socket.IO Redis adapter + sticky sessions + shared rate limiter before replicas | Open |
 | 3 | One Kafka partition limits consumer parallelism | Review partitions and consumer group design before increasing | Open |
 | 4 | Per-event friend/share/geofence queries | Compound indexes added; real-data plan and event-rate measurement still needed | **Open** — indexes added, unmeasured |
-| 5 | No Kafka consumer-lag or event-loop-lag metric | Add metrics/alerting or periodic `kafka-consumer-groups --describe` | Open |
+| 5 | No Kafka consumer-lag or event-loop-lag metric | Prometheus + kafka-exporter + `/metrics` added; thresholds still need a real load test | **Mitigated, unmeasured** |
 | 6 | In-memory rate limit/dedup state resets on restart | Accept for single process; move to Redis if replicating | Accepted |
 | 7 | Public Nominatim/OSRM/tile quotas | Monitor 4xx/429 and tile failures; have a fallback/provider plan | Open |
 | 8 | Kafka idle memory is ~45% of its limit | Shared-broker concern; coordinate with Infra before changing | Accepted |
 | 9 | 24 h TTL makes old shares empty | Product decision; document the empty state | Accepted |
-| 10 | No APM/tracing | Add structured logs/metrics if production usage grows | Open |
+| 10 | No APM/tracing | Prometheus metrics added; distributed tracing remains absent | **Partially mitigated** |
 
 ---
 
@@ -278,6 +303,11 @@ done
 
 # Backend logs (flush timing/errors)
 ssh oracle 'cd /opt/apps/live-location-tracker && docker compose -f docker-compose.prod.yml logs --tail=200 backend'
+
+# Prometheus health and LLT metrics (internal only; nginx returns 404 publicly)
+curl -sS http://127.0.0.1:9090/-/healthy
+curl -sS https://llt.140-245-27-200.sslip.io/metrics -o /dev/null -w '%{http_code}\n'   # expect 404
+ssh oracle 'docker exec global-prometheus wget -qO- http://llt-backend:5000/metrics | head'
 
 # MongoDB index verification (run inside the Mongo container/mongosh)
 # db.locationhistories.getIndexes()

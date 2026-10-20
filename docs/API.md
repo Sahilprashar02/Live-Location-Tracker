@@ -121,6 +121,7 @@ Every route uses `router.use(requireAuth)`.
 | Method | Path | Auth | Validation | Description |
 |---|---|---|---|---|
 | `GET` | `/health` | **Public** | None | Returns `200 { status:"ok", timestamp, database:{status:"connected",readyState:1} }` only when Mongoose is connected; otherwise `503 { status:"degraded", ... }`. Used by the Docker healthcheck and the deploy script. |
+| `GET` | `/metrics` | **Internal only** | None | Prometheus text exposition for the monitoring stack. The app listens on the private container port; the public nginx vhost returns `404` for `/metrics`. Do not proxy it publicly. |
 
 ### 3.6 Socket.IO events
 
@@ -153,6 +154,7 @@ reshape an event without checking both `backend/src/socket/handler.js` and
 | Method | Path | Why it is public | Risk |
 |---|---|---|---|
 | `GET` | `/health` | Docker/CI/deploy health probe | Reveals only database readiness, not data. Low. |
+| `GET` | `/metrics` | Scraped by Prometheus over `platform-network` | **Not public:** the nginx vhost returns `404`. The app port itself has no host publish. |
 | `GET` | `/auth/google` | Must be reachable to start OAuth | None beyond normal OAuth surface. |
 | `GET` | `/auth/google/callback` | Google redirects here without a local session | Passport validates the authorization code. OAuth `state` is **not** enabled or verified (see SECURITY §9). |
 | `GET` | `/auth/me` | Returns 401 without a session/JWT; the frontend calls it before login | No data leak; logs JWT verification errors to the server console. |
