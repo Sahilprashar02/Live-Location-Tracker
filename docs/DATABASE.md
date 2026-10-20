@@ -28,9 +28,9 @@ in the server `.env` and are not reproduced here.
 | Model | Purpose | Key fields | Indexes |
 |---|---|---|---|
 | `User` | Google identity and profile | `googleId` (required, unique), `displayName`, `email`, `avatar`, `lastSeen`; `createdAt`/`updatedAt` | `{ googleId: 1 }` unique |
-| `Friend` | Directional relationship between two users | `userId`, `friendId`, `status` (`pending`/`accepted`/`blocked`); timestamps | `{ userId: 1 }`, `{ friendId: 1 }`, `{ status: 1 }`, `{ userId: 1, friendId: 1 }` unique |
-| `Geofence` | An owner's alert around a target friend | `userId` (owner), `targetUserId`, `center.lat/lng`, `radius` 25–100000 m, `name` ≤80 chars, `triggerOn` (`enter`/`exit`/`both`), `isActive`, `lastState` (`inside`/`outside`/`unknown`); timestamps | `{ userId: 1 }`, `{ targetUserId: 1 }` |
-| `ShareSession` | A time-limited public share link | `shareCode` (unique), `ownerId`, `expiresAt` (nullable), `isActive`, `allowedViewers[]`; timestamps | `{ shareCode: 1 }` unique, `{ ownerId: 1 }`, `{ expiresAt: 1 }`, `{ isActive: 1 }` |
+| `Friend` | Directional relationship between two users | `userId`, `friendId`, `status` (`pending`/`accepted`/`blocked`); timestamps | `{ userId: 1 }`, `{ friendId: 1 }`, `{ status: 1 }`, `{ userId: 1, friendId: 1 }` unique, `{ userId: 1, status: 1 }`, `{ friendId: 1, status: 1 }` |
+| `Geofence` | An owner's alert around a target friend | `userId` (owner), `targetUserId`, `center.lat/lng`, `radius` 25–100000 m, `name` ≤80 chars, `triggerOn` (`enter`/`exit`/`both`), `isActive`, `lastState` (`inside`/`outside`/`unknown`); timestamps | `{ userId: 1 }`, `{ targetUserId: 1 }`, `{ targetUserId: 1, isActive: 1 }` |
+| `ShareSession` | A time-limited public share link | `shareCode` (unique), `ownerId`, `expiresAt` (nullable), `isActive`, `allowedViewers[]`; timestamps | `{ shareCode: 1 }` unique, `{ ownerId: 1 }`, `{ expiresAt: 1 }`, `{ isActive: 1 }`, `{ ownerId: 1, isActive: 1, expiresAt: 1 }` |
 | `LocationHistory` | The latest point and short history for a user | `userId`, `displayName`, `latitude`, `longitude`, `accuracy`, `eventId` (unique), `timestamp`, `processedAt` | `{ userId: 1, timestamp: -1 }`, `{ timestamp: 1 }` TTL 86400 s, `{ eventId: 1 }` unique |
 
 `LocationHistory` has `timestamps: false`; the others use Mongoose timestamps.
@@ -88,26 +88,26 @@ deleted by a TTL index. `GET /api/share/:code` returns 404 for them, and
 | `friends` | `friendId` | List incoming requests and find a target's friends |
 | `friends` | `status` | Filter pending/accepted relationships |
 | `friends` | `{ userId, friendId }` unique | Prevent duplicate directional requests |
+| `friends` | `{ userId, status }` | Accepted friends and outgoing pending requests |
+| `friends` | `{ friendId, status }` | Incoming requests and the broadcast consumer's accepted-friend lookup |
 | `geofences` | `userId` | List the owner's fences and route alerts to the owner |
-| `geofences` | `targetUserId` | Find fences watching a user on every location event |
+| `geofences` | `targetUserId` | Find fences watching a user |
+| `geofences` | `{ targetUserId, isActive }` | Per-location-event active-fence lookup |
 | `sharesessions` | `shareCode` unique | Public link lookup and socket room key |
 | `sharesessions` | `ownerId` | List a user's sessions |
 | `sharesessions` | `expiresAt` | Availability checks / expired-session cleanup |
 | `sharesessions` | `isActive` | Filter active sessions |
+| `sharesessions` | `{ ownerId, isActive, expiresAt }` | Per-location-event active-share lookup and expired-session cleanup |
 | `locationhistories` | `{ userId, timestamp: -1 }` | Latest point for a user/share link |
 | `locationhistories` | `{ timestamp: 1 }` TTL 86400 | Delete history after 24 hours |
 | `locationhistories` | `eventId` unique | Idempotent Kafka consumption; duplicate events are skipped |
 
-The `Friend` indexes on `userId`, `friendId`, and `status` are separate
-single-field indexes. The consumer query
-`{ friendId, status: 'accepted' }` has no compound index for that pair; whether
-MongoDB uses one index or an intersection has **not** been measured with
-`explain()`. **UNKNOWN**
-
-The `ShareSession` query
-`{ ownerId, isActive: true, expiresAt: { $gt: now } }` likewise has no compound
-index; it can use one of the single-field indexes. **UNKNOWN** at production
-scale.
+The per-event consumer and socket-handler queries now have compound indexes
+matching their filters. They were added on 2026-10-20 after the live
+`getIndexes()` check showed only the separate single-field indexes. Query-plan
+latency under real data is still **UNKNOWN** because `friends`,
+`sharesessions`, and `geofences` were empty when the change was made. See
+[PERFORMANCE.md](./PERFORMANCE.md) §3.4.
 
 ---
 
@@ -117,12 +117,13 @@ scale.
 |---|---|---|
 | `User.findOne({ googleId })` during OAuth | `googleId` unique | Low |
 | `User.findOne({ email: /^...$/i })` during friend request | **No email index** | Collection scan as users grow; the regex is escaped and anchored, but case-insensitive matching still prevents a simple index scan. **INFERRED** |
-| `Friend.find({ userId, status: 'accepted' })` | `userId` or `status` | Temporary in-memory sort/populate; no compound index |
-| `Friend.find({ friendId, status: 'accepted' })` in the broadcast consumer | `friendId` or `status` | Runs on **every** location event; candidate for a compound index |
+| `Friend.find({ userId, status: 'accepted' })` | `{ userId, status }` | Low; compound index matches the filter |
+| `Friend.find({ friendId, status: 'accepted' })` in the broadcast consumer | `{ friendId, status }` | Low; runs on **every** location event |
 | `Friend.findOneAndUpdate({ userId, friendId }, upsert)` | compound unique | Low |
-| `Geofence.find({ targetUserId, isActive: true })` | `targetUserId` | Runs on every location event; `isActive` is filtered after the index lookup |
+| `Geofence.find({ targetUserId, isActive: true })` | `{ targetUserId, isActive }` | Low; runs on every location event |
 | `ShareSession.findOne({ shareCode })` | unique `shareCode` | Low |
-| `ShareSession.find({ ownerId, isActive, expiresAt })` | `ownerId` | Runs on every location event for active shares |
+| `ShareSession.find({ ownerId, isActive, expiresAt })` | `{ ownerId, isActive, expiresAt }` | Low; runs on every location event for active shares |
+| `ShareSession.updateMany({ ownerId, isActive, expiresAt: { $lte } })` | `{ ownerId, isActive, expiresAt }` | Low; expired-session cleanup |
 | `LocationHistory.findOne({ userId }).sort({ timestamp: -1 })` | compound `{ userId, timestamp: -1 }` | Low |
 | `LocationHistory.insertMany(batch, { ordered: false })` | `eventId` unique | Duplicate-key errors are expected on retry and handled |
 | `User.updateMany({ _id: { $in: ids } }, { lastSeen })` | `_id` | One write per batch |
@@ -167,9 +168,12 @@ Treat the “index used” column as the intended index, not a measured plan.
    saved per event without an atomic compare-and-set. Concurrent events for the
    same target can produce a duplicate or missed transition. The app is a
    single process today, but socket handlers run concurrently. **INFERRED**
-10. **No index on `Friend.{friendId,status}` or
-    `ShareSession.{ownerId,isActive,expiresAt}`.** The per-event consumer
-    queries may degrade as collections grow. **INFERRED**
+10. **Per-event query cost is still unmeasured.** Compound indexes now cover
+    `Friend.{userId,status}`, `Friend.{friendId,status}`,
+    `Geofence.{targetUserId,isActive}`, and
+    `ShareSession.{ownerId,isActive,expiresAt}`, but the collections were empty
+    when they were added. Real-data query plans and latency remain **UNKNOWN**
+    until production has data. **INFERRED**
 
 ---
 

@@ -11,6 +11,8 @@ const shareSessionSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+shareSessionSchema.index({ ownerId: 1, isActive: 1, expiresAt: 1 });
+
 shareSessionSchema.methods.isAvailable = function isAvailable() {
   return this.isActive && (!this.expiresAt || this.expiresAt > new Date());
 };

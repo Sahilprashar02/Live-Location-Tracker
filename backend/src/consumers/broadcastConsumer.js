@@ -56,20 +56,26 @@ const startBroadcastConsumer = async (io) => {
 
           // Send coordinates only to the owner and accepted friends.
           io.to(`user:${locationEvent.userId}`).emit('location-update', payload);
-          const friendLinks = await Friend.find({
-            friendId: locationEvent.userId,
-            status: 'accepted',
-          }).select('userId').lean();
+
+          // Both lookups are independent, so do not serialize the two
+          // MongoDB round-trips on every location event.
+          const [friendLinks, activeShares] = await Promise.all([
+            Friend.find({
+              friendId: locationEvent.userId,
+              status: 'accepted',
+            }).select('userId').lean(),
+            ShareSession.find({
+              ownerId: locationEvent.userId,
+              isActive: true,
+              $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }],
+            }).select('shareCode').lean(),
+          ]);
+
           friendLinks.forEach(({ userId }) => {
             io.to(`user:${userId}`).emit('location-update', payload);
           });
 
           // Share-link viewers receive only the owner they explicitly opened.
-          const activeShares = await ShareSession.find({
-            ownerId: locationEvent.userId,
-            isActive: true,
-            $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }],
-          }).select('shareCode').lean();
           activeShares.forEach(({ shareCode }) => {
             io.to(`share:${shareCode}`).emit('share-location-update', payload);
           });

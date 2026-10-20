@@ -90,7 +90,7 @@ This confirms the consumer groups are connected; it is not a throughput test.
 
 ### 3.4 MongoDB indexes and query plans
 
-Read-only checks at the same snapshot:
+Read-only checks before the index change at the same snapshot:
 
 | Collection | Documents | Indexes present |
 |---|---|---|
@@ -109,8 +109,11 @@ returned = 1, keys examined = 1, docs examined = 1, executionTimeMillis = 0
 ```
 
 The friend, active-share, and geofence lookup plans could **not** be measured:
-their collections are empty. The separate single-field indexes exist, but the
-compound consumer queries have no measured plan or real-data cost yet.
+their collections are empty. Compound indexes matching those filters were added
+on 2026-10-20 (`Friend.{userId,status}`, `Friend.{friendId,status}`,
+`Geofence.{targetUserId,isActive}`, and
+`ShareSession.{ownerId,isActive,expiresAt}`), so the missing-index finding is
+addressed; real-data plan cost remains **UNKNOWN**.
 
 ### 3.5 Not measured
 
@@ -140,13 +143,16 @@ findings (verified by reading the code) whose cost is **INFERRED**:
 | Socket handler | In-memory `activeUsers` and `rateLimitMap`; no cross-process state | `socket/handler.js` | Single-process design |
 | Kafka | One partition, replication factor 1 | `config/kafka.js`; live topic description | Minimal compatible setup; single consumer per group |
 | DB consumer | Buffer 50 / 5 s; `insertMany` + `User.updateMany` per flush | `dbConsumer.js` | Batched write design |
-| Mongo indexes | Separate `Friend.friendId`/`status` indexes; no compound for the consumer query; no compound for active shares | `models/Friend.js`, `ShareSession.js`; live `getIndexes()` | Index set was not tuned with `explain()` |
+| Mongo indexes | Per-event friend/share/geofence queries originally had only separate single-field indexes | `models/*`; live `getIndexes()`; §3.4 | Index coverage was not tuned with `explain()` |
 | Kafka memory | 919 MiB / 2 GiB idle | live `docker stats` | Broker baseline/JVM heap; not app-specific |
 | Frontend | 5 s send throttle, 350 ms search debounce, 5 min weather cache | `app.js`, `search.js` | Client-side load control |
 
-Live `getIndexes()` on 2026-10-20 confirmed the index list in §3.4. The
-friend/share/geofence collections are empty, so the per-event query cost is
-still **UNKNOWN**, not inferred.
+Live `getIndexes()` on 2026-10-20 confirmed the old single-field index list.
+Compound indexes were added for `Friend.{userId,status}`,
+`Friend.{friendId,status}`, `Geofence.{targetUserId,isActive}`, and
+`ShareSession.{ownerId,isActive,expiresAt}`. The friend/share/geofence
+collections are empty, so the per-event query cost is still **UNKNOWN**; this
+change addresses index coverage, not the two-query fan-out itself.
 
 Kafka's idle memory is notable but is the shared broker's baseline, not an LLT
 leak. Do not reduce its limit without understanding the other projects using
@@ -166,6 +172,8 @@ These are already in the code, not proposals:
 | Client 5 s send interval + server 3 s per-user limit | Bounds event rate per user |
 | `{ userId, timestamp: -1 }` index | Latest-point lookup for a share link |
 | TTL 24 h on `timestamp` | Bounds history size and retention |
+| Compound indexes for per-event lookups | Covers `Friend.{friendId,status}`, `Geofence.{targetUserId,isActive}`, and active shares without changing query shapes |
+| Concurrent friend/share consumer lookups | The two independent MongoDB queries now run in `Promise.all` instead of serially |
 | Single Node process | Avoids duplicate socket state without an adapter; deliberately limits scale |
 | Keyless Esri tiles for Dark/Light | Removes the CARTO API-key dependency and its failing requests |
 
@@ -209,7 +217,7 @@ are.
 | 1 | No load test or real-user baseline | Run a staged socket/HTTP load test against a disposable environment | **Open** — idle baseline only |
 | 2 | Single Node process cannot scale horizontally | Add a Socket.IO Redis adapter + sticky sessions + shared rate limiter before replicas | Open |
 | 3 | One Kafka partition limits consumer parallelism | Review partitions and consumer group design before increasing | Open |
-| 4 | Per-event friend/share/geofence queries | Add compound indexes/caches after measuring `explain()` and event rate | Open |
+| 4 | Per-event friend/share/geofence queries | Compound indexes added; real-data plan and event-rate measurement still needed | **Open** — indexes added, unmeasured |
 | 5 | No Kafka consumer-lag or event-loop-lag metric | Add metrics/alerting or periodic `kafka-consumer-groups --describe` | Open |
 | 6 | In-memory rate limit/dedup state resets on restart | Accept for single process; move to Redis if replicating | Accepted |
 | 7 | Public Nominatim/OSRM/tile quotas | Monitor 4xx/429 and tile failures; have a fallback/provider plan | Open |
