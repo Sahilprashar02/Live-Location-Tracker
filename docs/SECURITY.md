@@ -279,6 +279,7 @@ major** (`vite@8`); `npm audit fix` can address some advisories.
 | `passport` / `passport-google-oauth20` | 0.7.0 / 2.0.0 |
 | `connect-mongo` | 5.1.0 |
 | `express-session` | 1.19.0 |
+| `@prometheus-io/client` | 0.16.1 |
 | `vite` (frontend dev) | 5.4.21 |
 
 ---
