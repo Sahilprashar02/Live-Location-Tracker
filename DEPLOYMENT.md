@@ -128,10 +128,15 @@ cd /opt/apps/live-location-tracker
 ./scripts/deploy.sh          # build → up -d --force-recreate → health poll
 ```
 
-CI: `.github/workflows/deploy.yml` (currently **manual only** — `workflow_dispatch`).
-It rsyncs `backend/`, `docker-compose.prod.yml` and `scripts/` to the server,
-then runs `scripts/deploy.sh`. To enable auto-deploy, uncomment the `push`
-trigger in that file. Requires repo secrets `SERVER_HOST` and `SSH_PRIVATE_KEY`.
+CI: `.github/workflows/deploy.yml` deploys automatically on pushes to `main`
+that touch `backend/**`, `scripts/**`, `docker-compose.prod.yml`, or the
+workflow itself. It can also be run manually (`workflow_dispatch`). It rsyncs
+`backend/`, `docker-compose.prod.yml` and `scripts/` to the server, then runs
+`scripts/deploy.sh`. Requires repo secrets:
+
+- `SERVER_HOST` — the bare IP/hostname `140.245.27.200` (not the local SSH
+  alias `oracle`, and no `ubuntu@` prefix).
+- `SSH_PRIVATE_KEY` — the private key file contents (not the `.pub`).
 
 ---
 
@@ -163,7 +168,7 @@ that removes volumes — shared databases and Kafka data live in volumes.
   `VITE_API_BASE=https://llt.140-245-27-200.sslip.io` (used for Socket.IO) or
   set `VITE_SOCKET_URL` explicitly. HTTP calls are same-origin and use
   `frontend/vercel.json` rewrites; no other frontend env is required.
-- Switch the CI workflow from manual to push-triggered once validated.
+- CI is push-triggered and validated (run `39367923258`).
 
 ---
 
