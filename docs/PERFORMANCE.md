@@ -338,8 +338,9 @@ ssh oracle 'docker exec global-prometheus wget -qO- http://llt-backend:5000/metr
 ```
 
 All commands in this section were run read-only on 2026-10-20; results are in
-§2–§3. For a real baseline, use a load generator and a disposable environment.
-Do not load-test production without explicit authorisation.
+§2–§3. The bounded `/health` probe in §7.2 was explicitly authorized. For a real
+socket baseline, use a load generator and a disposable environment; do not run
+heavier load tests against production without explicit authorization.
 
 ---
 
@@ -349,7 +350,7 @@ These claims were removed from the root README during the documentation pass:
 
 | Former claim | Current status |
 |---|---|
-| “hundreds of concurrent users” | No load test; single process, one partition |
+| “hundreds of concurrent users” | Only a bounded HTTP health probe; authenticated socket capacity is unmeasured; single process, one partition |
 | “free, unlimited OSRM profiles” | Public demo servers; no SLA or measured quota |
 | “high performance and scalability” | Architectural ceiling is one Node process; not measured |
 
