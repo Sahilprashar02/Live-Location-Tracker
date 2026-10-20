@@ -112,6 +112,8 @@ Only these things are covered today:
 - Backend syntax (when `node --check` is run).
 - Shell syntax (when `bash -n` is run).
 - The deployed health endpoint and public HTTP/socket handshake (manual).
+- Prometheus targets, internal `/metrics`, and the public `/metrics` 404 block
+  (manual).
 - The installed nginx vhost against the tracked copy (manual, read-only).
 - The frontend build **on Vercel** (not reproducible locally until
   `node_modules` is repaired).
@@ -133,10 +135,12 @@ That is not a test suite. It is a smoke check.
 | Share links | Create/stop/expiry, public lookup, guest socket, `share-session-ended`, `allowedViewers` (currently unenforced) |
 | Frontend | All UI flows, map rendering, search/directions/POI/weather failures, mobile layout, accessibility |
 | Security | XSS, CSRF, rate limiting, dependency remediation, header/CSP behavior |
+| Load | Authenticated Socket.IO sessions, location writes, Kafka fan-out, and geofence queries; only the bounded public `/health` probe was run |
 | Deployment | Rollback, container restart survival, CI failure handling; nginx `--apply` path (only `--check` was run) |
 
-There are no integration, contract, load, or end-to-end tests. The full Google
-sign-in and live location round-trip have **not** been exercised end to end.
+There are no integration, contract, authenticated load, or end-to-end tests.
+The full Google sign-in and live location round-trip have **not** been exercised
+end to end.
 
 ---
 
