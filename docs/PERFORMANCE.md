@@ -25,14 +25,14 @@ They prove the deployment is alive; they do not prove capacity.
 | Aspect | Value |
 |---|---|
 | Host | Oracle Cloud, `aarch64`, 4 vCPU, 23 GiB RAM (shared with other apps) |
-| OS/kernel | Not recorded — **UNKNOWN** |
-| Backend runtime | `node:22-alpine`, container `llt-backend`, memory limit 1 GiB |
-| MongoDB | `mongo:7`, container `global-mongodb`, memory limit 4 GiB |
+| OS/kernel | Ubuntu 24.04.5 LTS, Linux `6.17.0-1020-oracle` `aarch64` |
+| Backend runtime | `node:22-alpine` (Node `22.23.3`), container `llt-backend`, memory limit 1 GiB |
+| MongoDB | `mongo:7` (`7.0.43`), container `global-mongodb`, memory limit 4 GiB |
 | Kafka | `apache/kafka:3.9.1`, container `global-kafka`, memory limit 2 GiB, KRaft, 1 topic partition |
-| Reverse proxy | `global-nginx` (nginx 1.27.5), TLS |
+| Reverse proxy | `global-nginx` (nginx `1.27.5`), TLS |
 | Frontend | Vercel static deployment |
 | Workstation client | macOS, Node 24.21.0 (for tooling only; not the runtime) |
-| Date | 2026-10-20 |
+| Date | 2026-10-20 (refreshed `13:57 UTC`) |
 
 The server is shared; other projects' load is not isolated from these
 measurements.
@@ -43,28 +43,37 @@ measurements.
 
 ### 3.1 HTTP latency from one workstation
 
-Five sequential requests, `curl -w '%{time_total}'`, no concurrency:
+Ten sequential requests, `curl -w '%{time_total}'`, no concurrency:
 
 | Target | Status | Samples (s) | Median (s) |
 |---|---|---|---|
-| Backend `/health` | 200 | 0.0904, 0.0865, 0.0846, 0.0963, 0.0863 | **0.0865** |
-| Vercel `/` | 200 | 0.1021, 0.1031, 0.1026, 0.0996, 0.1021 | **0.1021** |
+| Backend `/health` | 200 | 0.1848, 0.0839, 0.1183, 0.1117, 0.1378, 0.1289, 0.0956, 0.1307, 0.0954, 0.1166 | **0.1174** |
+| Vercel `/` | 200 | 0.1418, 0.1335, 0.1219, 0.1625, 0.1458, 0.1284, 0.1415, 0.1310, 0.1403, 0.1362 | **0.1382** |
 
 These include public-internet latency to the origin and are not server-side
 timings. They are reproducible only from a similar network location.
 
+An earlier five-sample run at `13:55 UTC` had two `/health` outliers (1.29 s and
+2.19 s); the ten-sample run above is the recorded baseline. No load was
+generated, so these are not throughput or p95-under-load numbers.
+
 ### 3.2 Container resource snapshot
 
-`docker stats --no-stream` on the shared host:
+Three consecutive `docker stats --no-stream` samples at `13:57 UTC`; the
+median is shown:
 
 | Container | CPU | Memory usage | Memory limit | Approx. utilization |
 |---|---|---|---|---|
-| `llt-backend` | 1.46% | 51.95 MiB | 1 GiB | ~5% |
-| `global-mongodb` | 0.36% | 159.4 MiB | 4 GiB | ~4% |
-| `global-kafka` | 0.59% | 913.1 MiB | 2 GiB | ~45% |
+| `llt-backend` | 1.50% | 54.67 MiB | 1 GiB | ~5.3% |
+| `global-mongodb` | 0.42% | 160.6 MiB | 4 GiB | ~3.9% |
+| `global-kafka` | 0.72% | 919.0 MiB | 2 GiB | ~44.9% |
 
-Host memory: 23 GiB total, 2.9 GiB used, 20 GiB buff/cache, 389 MiB free
+Host memory: 23 GiB total, 3.0 GiB used, 923 MiB free, 19 GiB buff/cache
 (20 GiB available). This is an **idle** snapshot; no user load was generated.
+
+A preceding single sample showed transient CPU spikes (`llt-backend` 5.02%,
+`global-mongodb` 63.55%, `global-kafka` 165.20%). The host is shared, so
+other projects' load is not controlled.
 
 ### 3.3 Kafka
 
@@ -79,7 +88,31 @@ Host memory: 23 GiB total, 2.9 GiB used, 20 GiB buff/cache, 389 MiB free
 The topic had three historical events and both consumer groups were caught up.
 This confirms the consumer groups are connected; it is not a throughput test.
 
-### 3.4 Not measured
+### 3.4 MongoDB indexes and query plans
+
+Read-only checks at the same snapshot:
+
+| Collection | Documents | Indexes present |
+|---|---|---|
+| `friends` | 0 | `_id`, `userId`, `friendId`, `status`, unique `userId+friendId` |
+| `sharesessions` | 0 | `_id`, unique `shareCode`, `ownerId`, `expiresAt`, `isActive` |
+| `geofences` | 0 | `_id`, `userId`, `targetUserId` |
+| `locationhistories` | 3 | `_id`, unique `eventId`, `userId+timestamp:-1`, TTL `timestamp` (86400 s) |
+| `users` | 1 | `_id`, unique `googleId` |
+
+The latest-location query used by the share viewer:
+
+```text
+LocationHistory.findOne({ userId }).sort({ timestamp: -1 })
+plan = LIMIT > FETCH > IXSCAN
+returned = 1, keys examined = 1, docs examined = 1, executionTimeMillis = 0
+```
+
+The friend, active-share, and geofence lookup plans could **not** be measured:
+their collections are empty. The separate single-field indexes exist, but the
+compound consumer queries have no measured plan or real-data cost yet.
+
+### 3.5 Not measured
 
 | Metric | Status |
 |---|---|
@@ -87,7 +120,7 @@ This confirms the consumer groups are connected; it is not a throughput test.
 | p50/p95/p99 API latency under load | **UNKNOWN** |
 | Socket event round-trip latency | **UNKNOWN** |
 | Kafka produce latency and consumer throughput | **UNKNOWN** |
-| Mongo query latency / `explain()` plans | **UNKNOWN** |
+| Mongo query latency / `explain()` plans for friend/share/geofence queries | **UNKNOWN** — collections empty; only latest-location plan measured |
 | Memory growth over hours/days | **UNKNOWN** |
 | Deploy duration (build/restart/health phases) | **UNKNOWN** in this document; the deploy script prints it per run |
 | Error rate | **UNKNOWN** |
@@ -107,9 +140,13 @@ findings (verified by reading the code) whose cost is **INFERRED**:
 | Socket handler | In-memory `activeUsers` and `rateLimitMap`; no cross-process state | `socket/handler.js` | Single-process design |
 | Kafka | One partition, replication factor 1 | `config/kafka.js`; live topic description | Minimal compatible setup; single consumer per group |
 | DB consumer | Buffer 50 / 5 s; `insertMany` + `User.updateMany` per flush | `dbConsumer.js` | Batched write design |
-| Mongo indexes | Separate `Friend.friendId`/`status` indexes; no compound for the consumer query; no compound for active shares | `models/Friend.js`, `ShareSession.js` | Index set was not tuned with `explain()` |
-| Kafka memory | 913 MiB / 2 GiB idle | live `docker stats` | Broker baseline/JVM heap; not app-specific |
+| Mongo indexes | Separate `Friend.friendId`/`status` indexes; no compound for the consumer query; no compound for active shares | `models/Friend.js`, `ShareSession.js`; live `getIndexes()` | Index set was not tuned with `explain()` |
+| Kafka memory | 919 MiB / 2 GiB idle | live `docker stats` | Broker baseline/JVM heap; not app-specific |
 | Frontend | 5 s send throttle, 350 ms search debounce, 5 min weather cache | `app.js`, `search.js` | Client-side load control |
+
+Live `getIndexes()` on 2026-10-20 confirmed the index list in §3.4. The
+friend/share/geofence collections are empty, so the per-event query cost is
+still **UNKNOWN**, not inferred.
 
 Kafka's idle memory is notable but is the shared broker's baseline, not an LLT
 leak. Do not reduce its limit without understanding the other projects using
@@ -151,11 +188,11 @@ If you need a before/after, capture one now and record the versions.
 
 | Resource | Allowance | Consumption (idle snapshot) | Headroom |
 |---|---|---|---|
-| `llt-backend` memory | 1 GiB | 51.95 MiB | ~95% |
-| `llt-backend` CPU | 4 shared vCPU (no per-container CPU limit) | 1.46% | Large at idle; unknown under load |
-| `global-mongodb` memory | 4 GiB | 159.4 MiB | ~96% |
-| `global-kafka` memory | 2 GiB | 913.1 MiB | ~55% |
-| Host memory | 23 GiB | 2.9 GiB used + 20 GiB cache | ~20 GiB available |
+| `llt-backend` memory | 1 GiB | 54.67 MiB | ~95% |
+| `llt-backend` CPU | 4 shared vCPU (no per-container CPU limit) | 1.50% | Large at idle; unknown under load |
+| `global-mongodb` memory | 4 GiB | 160.6 MiB | ~96% |
+| `global-kafka` memory | 2 GiB | 919.0 MiB | ~55% |
+| Host memory | 23 GiB | 3.0 GiB used + 19 GiB cache | ~20 GiB available |
 | Kafka partitions | 1 | 1 | No parallelism |
 | Backend replicas | 1 | 1 | No horizontal headroom by design |
 
@@ -169,7 +206,7 @@ are.
 
 | # | Risk | Mitigation | Status |
 |---|---|---|---|
-| 1 | No load test or real-user baseline | Run a staged socket/HTTP load test against a disposable environment | Open |
+| 1 | No load test or real-user baseline | Run a staged socket/HTTP load test against a disposable environment | **Open** — idle baseline only |
 | 2 | Single Node process cannot scale horizontally | Add a Socket.IO Redis adapter + sticky sessions + shared rate limiter before replicas | Open |
 | 3 | One Kafka partition limits consumer parallelism | Review partitions and consumer group design before increasing | Open |
 | 4 | Per-event friend/share/geofence queries | Add compound indexes/caches after measuring `explain()` and event rate | Open |
@@ -221,7 +258,7 @@ ssh oracle 'docker exec global-kafka /opt/kafka/bin/kafka-consumer-groups.sh --b
 ssh oracle 'docker exec global-kafka /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group db-processor-group'
 
 # HTTP total time (public network; not server-side)
-for i in 1 2 3 4 5; do
+for i in $(seq 1 10); do
   curl -sS -o /dev/null -w '%{http_code} %{time_total}\n' https://llt.140-245-27-200.sslip.io/health
 done
 
@@ -232,10 +269,13 @@ ssh oracle 'cd /opt/apps/live-location-tracker && docker compose -f docker-compo
 # db.locationhistories.getIndexes()
 # db.friends.getIndexes()
 # db.sharesessions.getIndexes()
+# db.geofences.getIndexes()
+# db.users.getIndexes()
 ```
 
-For a real baseline, use a load generator and a disposable environment. Do not
-load-test production without explicit authorisation.
+All commands in this section were run read-only on 2026-10-20; results are in
+§2–§3. For a real baseline, use a load generator and a disposable environment.
+Do not load-test production without explicit authorisation.
 
 ---
 
