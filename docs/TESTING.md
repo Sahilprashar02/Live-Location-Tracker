@@ -82,6 +82,10 @@ live site serves a hashed bundle. Treat the local build as **unverified** until
 | Compound indexes after deploy | `getIndexes()` on `friends`, `sharesessions`, `geofences` | `userId+status`, `friendId+status`, `targetUserId+isActive`, and `ownerId+isActive+expiresAt` present |
 | Per-event query plans | `explain()` against empty collections | `IXSCAN` selected for friend, geofence, and active-share queries |
 | Shared-network upstream | `docker exec global-nginx wget -qO- http://llt-backend:5000/health` | `200`, database connected |
+| Internal metrics | `docker exec global-prometheus wget -qO- http://llt-backend:5000/metrics` | Prometheus text; `llt_active_users`, `llt_location_events_produced_total`, and runtime metrics present |
+| Public metrics block | `GET https://llt.140-245-27-200.sslip.io/metrics` | `404`; nginx does not proxy the metrics endpoint |
+| Prometheus target | Prometheus `/api/v1/targets` | `llt-backend` is `up` |
+| Kafka lag exporter | Prometheus `kafka_consumergroup_lag` | `broadcast-group` and `db-processor-group` both report `0` |
 | HTTP to HTTPS | `GET http://llt.140-245-27-200.sslip.io/health` | `301` to the HTTPS URL |
 | Public TLS | `GET https://llt.140-245-27-200.sslip.io/health` | `200`, certificate verified (`ssl_verify_result=0`), HTTP/2 |
 | WebSocket upgrade through nginx | `wss://llt.140-245-27-200.sslip.io/socket.io/?EIO=4&transport=websocket` | `101 Switching Protocols`, Engine.IO open packet |

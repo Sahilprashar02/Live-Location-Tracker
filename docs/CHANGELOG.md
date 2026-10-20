@@ -21,6 +21,32 @@
 Newest first. Record real commits — a changelog written from memory drifts
 from the history within weeks.
 
+## 2026-10-20 — Internal Prometheus metrics and CPU ceiling
+
+**What changed**
+
+Added `backend/src/metrics.js` and `GET /metrics`, backed by
+`@prometheus-io/client`. The endpoint exports Node runtime metrics, active
+socket/user counts, location events produced/consumed/dropped, geofence alerts,
+and HTTP request duration. Added counters to the socket handler and both Kafka
+consumers. The public nginx vhost returns `404` for `/metrics`; Prometheus
+scrapes `llt-backend:5000` over `platform-network`. Added a 1 vCPU ceiling to
+`docker-compose.prod.yml`.
+
+**Why**
+
+The performance review found no app-level metrics, no Kafka consumer-lag
+visibility, and no per-container CPU ceiling. These metrics make the next
+capacity decision measurable instead of guesswork.
+
+**Evidence**
+
+Commit `52341f2`. Deploy restarted `llt-backend` at `14:55:13 UTC`; `/health`
+returned `200`, the internal metrics endpoint returned Prometheus text, and
+`https://llt.140-245-27-200.sslip.io/metrics` returned `404`. Prometheus target
+`llt-backend` is `up`; `kafka-exporter` reports zero lag for both consumer
+groups. No load test was run.
+
 ## 2026-10-20 — Compound indexes for per-event lookups
 
 **What changed**
