@@ -71,8 +71,10 @@ precedence when all three are present. Otherwise, `KAFKA_USERNAME` +
 `KAFKA_PASSWORD` enables SASL, by default SASL/PLAIN with TLS. `KAFKA_SASL_MECHANISM`
 and `KAFKA_SSL=false` adapt it to the shared broker's authenticated listener
 (`global-kafka:9094`, SCRAM-SHA-512, no TLS), enabled by the Infra repo's
-`compose.kafka-sasl.yml`. If neither set is present, the client connects without
-TLS/SASL, which is the shared broker's default plaintext listener (`global-kafka:9092`).
+`compose.kafka-sasl.yml`; production uses this. If neither set is present, the
+client connects without TLS/SASL (the local `docker-compose.yml` broker). The
+shared broker's plaintext listener `global-kafka:9092` is now loopback-only
+inside the broker and not reachable from the backend.
 
 ---
 
@@ -114,8 +116,8 @@ currently unused in the normal production path:
 
 | Variable | Why it is unused / conditional |
 |---|---|
-| `KAFKA_CA_CERT`, `KAFKA_ACCESS_CERT`, `KAFKA_ACCESS_KEY` | Only used when all three are set; production uses a plaintext in-network broker |
-| `KAFKA_USERNAME`, `KAFKA_PASSWORD`, `KAFKA_SASL_MECHANISM`, `KAFKA_SSL` | Only used when the cert triple is absent; set in production once the shared broker's SASL listener is enabled |
+| `KAFKA_CA_CERT`, `KAFKA_ACCESS_CERT`, `KAFKA_ACCESS_KEY` | Only used when all three are set; production uses SASL/SCRAM on the in-network broker instead |
+| `KAFKA_USERNAME`, `KAFKA_PASSWORD`, `KAFKA_SASL_MECHANISM`, `KAFKA_SSL` | Only used when the cert triple is absent; set in production for the shared broker's SASL listener |
 | `SERVE_FRONTEND` | Not set in production; the backend-only image has no `frontend/index.html`, so static serving is already off |
 | `VITE_SOCKET_URL` | Not set in the current local `frontend/.env`; the code falls back to `VITE_API_BASE` |
 | `NODE_ENV` | Not read explicitly by application code; Express and libraries use it. Production compose sets it |

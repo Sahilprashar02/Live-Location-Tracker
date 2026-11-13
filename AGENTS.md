@@ -94,7 +94,7 @@ on 2026-10-20, not the semver ranges.
 | 2 | **Kafka is on the location write path only.** Topic `location-updates` has **1 partition**; events are keyed by `userId`. Changing partitions or adding consumer groups requires an ordering/fan-out review. |
 | 3 | **The backend image is backend-only.** The frontend is deployed from Vercel. Do not copy `frontend/` into the image or make the backend serve it in production. |
 | 4 | **HTTP is same-origin via Vercel rewrites.** `/auth/*` and `/api/*` proxy to the backend; **Socket.IO connects directly** because Vercel cannot carry the WebSocket upgrade. Do not “fix” this by making browser HTTP calls to the raw backend host. |
-| 5 | **Shared infrastructure is out of scope.** `global-nginx`, `global-mongodb`, `global-kafka`, and `platform-network` are managed by the Infra repo. Never restart, recreate, prune, or delete them as part of an LLT change. |
+| 5 | **Shared infrastructure is out of scope.** `global-nginx`, `global-mongodb`, `global-kafka`, and LLT's per-app Docker networks `infra-app-llt` and `infra-data-llt` are managed by the Infra repo. Never restart, recreate, prune, or delete them as part of an LLT change. |
 | 6 | **Production secrets live only in the server `.env` (mode 600), Vercel env, and GitHub secrets.** Never commit, print, copy into docs, or bake them into an image. |
 | 7 | **`LocationHistory` is ephemeral.** A TTL index deletes points 24 hours after `timestamp`. Do not build a durable history/trip-replay feature on it without a schema decision. |
 | 8 | **No migration framework and no test runner/linter.** Do not invent either for a single change. Schema changes follow [docs/DATABASE.md](docs/DATABASE.md) §8; verification follows [docs/TESTING.md](docs/TESTING.md). |
@@ -316,7 +316,7 @@ explicit human authorisation:**
 - `docker compose ... down -v`
 - `docker volume prune`, `docker system prune`, `docker image prune -a`
 - `docker rm -f global-nginx global-mongodb global-kafka`
-- Deleting or recreating `platform-network`
+- Deleting or recreating the Infra-owned networks `infra-app-llt` / `infra-data-llt`
 - `scripts/deploy.sh` — rebuilds and **force-recreates** `llt-backend`
   (brief app downtime); it prunes dangling images only
 - `CONFIRM=yes scripts/install-nginx-vhost.sh --apply` — writes the shared

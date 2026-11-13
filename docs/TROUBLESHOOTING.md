@@ -77,7 +77,7 @@ Check in this order:
 4. Is the Mongo user/password correct? Do not print the URI or password.
 5. Is `PORT` set? `validateEnv` requires it even though the code has a `3000`
    fallback. Production sets `5000` in compose.
-6. Is the container on `platform-network`?
+6. Is the container on `infra-app-llt` and `infra-data-llt`?
 
 ### A required variable is missing
 
@@ -112,7 +112,8 @@ ssh oracle 'docker exec global-kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-
 ```
 
 Do not create a second broker. `KAFKA_BROKER` in production is
-`global-kafka:9092`.
+`global-kafka:9094` (SASL/SCRAM-SHA-512). The `localhost:9092` commands above
+run inside the broker, where the plaintext listener is loopback-only.
 
 ### Port already in use
 
@@ -132,7 +133,7 @@ it is `1` (`connected`). It does not run a query or check Kafka.
 1. `curl /health` → `{"status":"degraded","database":{"status":"disconnected",...}}`
 2. `docker logs llt-backend` for `MongoDB disconnected` / `MongoDB error`.
 3. `docker inspect --format="{{.State.Health.Status}}" global-mongodb`.
-4. Verify the app can resolve `global-mongodb` on `platform-network`.
+4. Verify the app can resolve `global-mongodb` on `infra-data-llt`.
 
 A `connecting` state (2) also returns 503; wait for the connection to settle.
 

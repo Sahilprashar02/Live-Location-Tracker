@@ -11,7 +11,7 @@
 |---|---|---|---|
 | Google OAuth 2.0 | Sign-in and profile | OAuth client id/secret | **Yes** — no login without it |
 | MongoDB (`global-mongodb`) | All persistent state | Connection-string credentials | **Yes** — app exits at startup if down; health 503 later |
-| Kafka (`global-kafka`) | Location event bus | None in-network (plaintext) | **Partial** — HTTP/socket stay up; live fan-out and history stop |
+| Kafka (`global-kafka`) | Location event bus | SASL/SCRAM-SHA-512 (`llt` user, per-app ACLs) on `global-kafka:9094` | **Partial** — HTTP/socket stay up; live fan-out and history stop |
 | nginx (`global-nginx`) | TLS and reverse proxy | None (network boundary) | **Yes** for the backend origin |
 | Vercel | Static frontend, `/auth` + `/api` rewrites | Vercel account | **Yes** for the browser app |
 | Esri ArcGIS tiles | Dark, Light, Satellite basemaps | None (keyless) | No — map can switch layers |
@@ -88,7 +88,7 @@ its expiry, but middleware that needs a session store may fail first.
 |---|---|
 | Purpose | Decouple location ingest from fan-out and batched persistence |
 | Protocol | Kafka protocol via `kafkajs` 2.2.4 |
-| Auth | Today: none, plaintext on `platform-network` (`global-kafka:9092`). Supported: SCRAM-SHA-512 on the shared broker's SASL listener (`global-kafka:9094`) once the Infra repo enables `compose.kafka-sasl.yml`. The `llt` user then holds ACLs for topic prefix `location-` and groups `broadcast-group` / `db-processor-group` only |
+| Auth | SCRAM-SHA-512 on the shared broker's SASL listener `global-kafka:9094` (no TLS; reached over the internal network `infra-data-llt`), enabled by the Infra repo on 2026-11-13. The `llt` user holds ACLs for topic prefix `location-` and groups `broadcast-group` / `db-processor-group` only. The old plaintext listener `global-kafka:9092` is loopback-only inside the broker |
 | Env vars | `KAFKA_BROKER` (required); optional TLS/SASL variables (`KAFKA_USERNAME`, `KAFKA_PASSWORD`, `KAFKA_SASL_MECHANISM`, `KAFKA_SSL`, mTLS triple) in `backend/src/config/kafka.js` |
 | Topic | `location-updates`, **1 partition**, replication factor 1, auto-created if absent |
 | Consumer groups | `broadcast-group`, `db-processor-group` |
@@ -97,7 +97,7 @@ its expiry, but middleware that needs a session store may fail first.
 | Tested? | The container is running; the app's Kafka init is verified by code, not by an end-to-end location event in this pass |
 
 The broker is a shared `apache/kafka:3.9.1` container with a 2 GiB memory
-limit, internal address `global-kafka:9092`, and no host port. It is managed by
+limit, client address `global-kafka:9094` (SASL), and no host port. It is managed by
 the Infra compose, not `docker-compose.prod.yml`.
 
 The topic is created with `numPartitions: 1` for compatibility. Events are

@@ -56,11 +56,15 @@ graph LR
     A -->|produce/consume| K[(global-kafka)]
 ```
 
-- `llt-backend` is on the external Docker network `platform-network` and
-  publishes **no host port**.
+- `llt-backend` is on two external per-app Docker networks owned by the Infra
+  repo (`scripts/create-networks.sh`) and publishes **no host port**:
+  `infra-app-llt` (with `global-nginx` and `global-prometheus`; has egress,
+  needed for Google OAuth) and `infra-data-llt` (`--internal`, no egress; with
+  `global-mongodb` and `global-kafka`). It cannot reach other apps, Redis,
+  PostgreSQL, or the exporters.
 - `global-nginx` terminates TLS and is the only public path to the backend.
 - This mirrors the existing `vantagehire-backend` and `teambaithak-backend`
-  pattern: app container on `platform-network`, no host port, hostname vhost in
+  pattern: app container on Infra-owned networks, no host port, hostname vhost in
   `global-nginx`. The LLT vhost adds `/socket.io/` upgrade headers and long
   read/send timeouts because this app uses WebSockets.
 - Vercel cannot carry the WebSocket upgrade; the browser connects directly to
@@ -77,7 +81,7 @@ Production paths:
 | Server env | `/opt/apps/live-location-tracker/.env` (mode `600`) |
 | Compose file | `/opt/apps/live-location-tracker/docker-compose.prod.yml` |
 | Container | `llt-backend` |
-| Shared network | `platform-network` |
+| Networks | `infra-app-llt`, `infra-data-llt` (external, Infra-owned) |
 | Shared Mongo | `global-mongodb` |
 | Shared Kafka | `global-kafka` |
 | nginx vhost | Infra-managed (`/opt/apps/infra/nginx/conf.d/llt.conf`); reviewable copy at `deploy/nginx/llt.conf` |
@@ -96,7 +100,10 @@ On the server, from the app directory:
 
 It is idempotent and non-destructive:
 
-1. verifies/creates `platform-network`
+1. verifies/creates `platform-network` (legacy; production no longer uses it.
+   The backend's networks `infra-app-llt` / `infra-data-llt` are created by the
+   Infra repo's `scripts/create-networks.sh`, and `scripts/deploy.sh` fails if
+   either is missing)
 2. creates the Mongo user through `/opt/apps/infra/scripts/add-app-mongo-user.sh`
 3. creates `.env` from `.env.production.example` **only if missing**, then stops
    so a human can fill in real values
@@ -133,7 +140,7 @@ It:
 
 `scripts/deploy.sh` then:
 
-1. checks `.env` and `platform-network`; warns (does not fail) if
+1. checks `.env` and that `infra-app-llt` and `infra-data-llt` exist; warns (does not fail) if
    `global-kafka` is missing
 2. runs `git pull --ff-only` only if the server directory is a git checkout
    (the CI rsync path is non-git, so this step is skipped)
@@ -309,7 +316,7 @@ The server is shared with other projects. The deploy is backend-only by design.
   `CONFIRM=yes` and explicit authorization because it reloads shared nginx.
 - `scripts/deploy.sh` prunes **dangling images only**. That is intentional.
 - `docker-compose.prod.yml` manages only the `backend` service; it declares
-  `platform-network` as external.
+  `infra-app-llt` and `infra-data-llt` as external. LLT never creates them.
 - Kafka is a shared `global-kafka` broker. Do not create a per-project broker.
 - MongoDB is a shared `global-mongodb`; the app uses the `location_tracker`
   database and `location_tracker_user`.

@@ -53,17 +53,19 @@ if [ ! -f ".env" ]; then
     echo "     cp .env.production.example .env  # then fill in real values"
     exit 1
 fi
-if ! docker network inspect platform-network >/dev/null 2>&1; then
-    echo "  ❌ Docker network 'platform-network' is missing."
-    echo "     Create once: docker network create platform-network"
-    exit 1
-fi
+for net in infra-app-llt infra-data-llt; do
+    if ! docker network inspect "$net" >/dev/null 2>&1; then
+        echo "  ❌ Docker network '$net' is missing."
+        echo "     It is owned by the Infra repo: /opt/apps/infra/scripts/create-networks.sh"
+        exit 1
+    fi
+done
 if ! docker inspect global-kafka >/dev/null 2>&1; then
     echo "  ⚠️  global-kafka container not found."
     echo "     Start the shared broker first: (cd /opt/apps/infra && docker compose up -d kafka)"
     echo "     Continuing — the app starts without Kafka and retries in the background."
 fi
-echo "  ✅ .env present, platform-network present"
+echo "  ✅ .env present, infra-app-llt and infra-data-llt present"
 
 # ── 1. Pull latest code (if inside a git repository) ──────────────────────────
 if [ -d ".git" ]; then
