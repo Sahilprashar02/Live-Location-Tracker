@@ -55,8 +55,10 @@ files contain placeholders.
 | `KAFKA_CA_CERT` | PEM CA certificate for TLS Kafka | No | None | Server — **secret-ish** |
 | `KAFKA_ACCESS_CERT` | PEM client certificate for mutual TLS | No | None | Server — **secret** |
 | `KAFKA_ACCESS_KEY` | PEM client private key for mutual TLS | No | None | Server — **secret** |
-| `KAFKA_USERNAME` | SASL/PLAIN username (used only if certs are absent) | No | None | Server |
-| `KAFKA_PASSWORD` | SASL/PLAIN password | No | None | Server — **secret** |
+| `KAFKA_USERNAME` | SASL username (used only if certs are absent) | No | None | Server |
+| `KAFKA_PASSWORD` | SASL password | No | None | Server — **secret** |
+| `KAFKA_SASL_MECHANISM` | SASL mechanism: `plain`, `scram-sha-256` or `scram-sha-512` (case-insensitive); any other value stops startup | No | `plain` | Server |
+| `KAFKA_SSL` | Set to the exact string `false` to use SASL without TLS (the in-network `global-kafka:9094` listener); any other value keeps TLS on | No | TLS on | Server |
 | `PORT` | HTTP port the Node process listens on | **Yes** per `validateEnv`; code also defaults to `3000` | `3000` in code, `5000` in production compose | Server |
 | `NODE_ENV` | Express/runtime mode; production compose sets it | No | None in code; `production` in compose | Server |
 | `CLIENT_URL` | Exact frontend origin for CORS, socket CORS, and post-login/logout redirects | **No in code, but required for the deployed cross-origin setup** | None (CORS middleware is not mounted; redirect is relative) | Server (the URL itself is public) |
@@ -66,9 +68,11 @@ files contain placeholders.
 
 The `KAFKA_CA_CERT` / `KAFKA_ACCESS_CERT` / `KAFKA_ACCESS_KEY` path takes
 precedence when all three are present. Otherwise, `KAFKA_USERNAME` +
-`KAFKA_PASSWORD` enables SASL/PLAIN with TLS. If neither set is present, the
-client connects without TLS/SASL. Production uses the shared plaintext broker
-inside `platform-network`, so none of these are set there.
+`KAFKA_PASSWORD` enables SASL, by default SASL/PLAIN with TLS. `KAFKA_SASL_MECHANISM`
+and `KAFKA_SSL=false` adapt it to the shared broker's authenticated listener
+(`global-kafka:9094`, SCRAM-SHA-512, no TLS), enabled by the Infra repo's
+`compose.kafka-sasl.yml`. If neither set is present, the client connects without
+TLS/SASL, which is the shared broker's default plaintext listener (`global-kafka:9092`).
 
 ---
 
@@ -111,7 +115,7 @@ currently unused in the normal production path:
 | Variable | Why it is unused / conditional |
 |---|---|
 | `KAFKA_CA_CERT`, `KAFKA_ACCESS_CERT`, `KAFKA_ACCESS_KEY` | Only used when all three are set; production uses a plaintext in-network broker |
-| `KAFKA_USERNAME`, `KAFKA_PASSWORD` | Only used when the cert triple is absent; production does not use SASL |
+| `KAFKA_USERNAME`, `KAFKA_PASSWORD`, `KAFKA_SASL_MECHANISM`, `KAFKA_SSL` | Only used when the cert triple is absent; set in production once the shared broker's SASL listener is enabled |
 | `SERVE_FRONTEND` | Not set in production; the backend-only image has no `frontend/index.html`, so static serving is already off |
 | `VITE_SOCKET_URL` | Not set in the current local `frontend/.env`; the code falls back to `VITE_API_BASE` |
 | `NODE_ENV` | Not read explicitly by application code; Express and libraries use it. Production compose sets it |

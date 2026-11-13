@@ -21,6 +21,39 @@
 Newest first. Record real commits — a changelog written from memory drifts
 from the history within weeks.
 
+## 2026-11-13 — Configurable Kafka SASL mechanism and TLS
+
+**What changed**
+
+`backend/src/config/kafka.js` reads two optional variables when
+`KAFKA_USERNAME`/`KAFKA_PASSWORD` are set: `KAFKA_SASL_MECHANISM`
+(`plain` | `scram-sha-256` | `scram-sha-512`; default `plain`) and `KAFKA_SSL`
+(`false` disables TLS; default on). An invalid mechanism stops startup with a
+message that does not include credentials. `getKafkaConnectionOptions(env)` is
+exported for testability. Unset, behaviour is unchanged.
+
+**Why**
+
+The shared `global-kafka` broker is moving from unauthenticated PLAINTEXT, where any
+container on `platform-network` can read or write location events, to per-app
+SCRAM-SHA-512 users with ACLs on a non-TLS in-network listener (Infra
+`compose.kafka-sasl.yml`). The SASL branch used to hard-code PLAIN over TLS, which
+cannot connect to that listener.
+
+**Evidence**
+
+- `node --check` passes on every backend file.
+- 6 configuration cases were checked with Node `assert`: unset; legacy SASL; SCRAM
+  without TLS; a non-`false` `KAFKA_SSL` keeps TLS; an invalid mechanism throws
+  without echoing the password; the cert triple still wins.
+- End to end against a local `apache/kafka:3.9.1` with the Infra SASL override and
+  an `llt` user created by `scripts/kafka-app-user.sh`, the unmodified LLT module:
+  - connected with SCRAM-SHA-512;
+  - created `location-updates`, with auto-create off;
+  - produced an event that both `broadcast-group` and `db-processor-group`
+    consumed;
+  - was refused for a group outside its ACL ("Group authorization failed").
+
 ## 2026-10-20 — Internal Prometheus metrics and CPU ceiling
 
 **What changed**

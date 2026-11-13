@@ -7,10 +7,14 @@ const normalizeCertificate = (value) => {
   return value.replace(/\\n/g, '\n');
 };
 
-const getKafkaConnectionOptions = () => {
-  const ca = normalizeCertificate(process.env.KAFKA_CA_CERT);
-  const cert = normalizeCertificate(process.env.KAFKA_ACCESS_CERT);
-  const key = normalizeCertificate(process.env.KAFKA_ACCESS_KEY);
+// SASL mechanisms supported by kafkajs. The shared global-kafka broker uses
+// scram-sha-512 when its SASL listener (Infra compose.kafka-sasl.yml) is on.
+const SASL_MECHANISMS = ['plain', 'scram-sha-256', 'scram-sha-512'];
+
+const getKafkaConnectionOptions = (env = process.env) => {
+  const ca = normalizeCertificate(env.KAFKA_CA_CERT);
+  const cert = normalizeCertificate(env.KAFKA_ACCESS_CERT);
+  const key = normalizeCertificate(env.KAFKA_ACCESS_KEY);
 
   if (ca && cert && key) {
     return {
@@ -23,13 +27,22 @@ const getKafkaConnectionOptions = () => {
     };
   }
 
-  if (process.env.KAFKA_USERNAME && process.env.KAFKA_PASSWORD) {
+  if (env.KAFKA_USERNAME && env.KAFKA_PASSWORD) {
+    // Defaults keep the previous behaviour (SASL/PLAIN over TLS, for hosted
+    // brokers). The in-network broker has no TLS, so it sets KAFKA_SSL=false
+    // and KAFKA_SASL_MECHANISM=scram-sha-512.
+    const mechanism = (env.KAFKA_SASL_MECHANISM || 'plain').toLowerCase();
+    if (!SASL_MECHANISMS.includes(mechanism)) {
+      throw new Error(
+        `KAFKA_SASL_MECHANISM must be one of ${SASL_MECHANISMS.join(', ')}`
+      );
+    }
     return {
-      ssl: true,
+      ssl: env.KAFKA_SSL !== 'false',
       sasl: {
-        mechanism: 'plain',
-        username: process.env.KAFKA_USERNAME,
-        password: process.env.KAFKA_PASSWORD,
+        mechanism,
+        username: env.KAFKA_USERNAME,
+        password: env.KAFKA_PASSWORD,
       },
     };
   }
@@ -110,4 +123,5 @@ module.exports = {
   initKafka,
   disconnectKafka,
   TOPIC,
+  getKafkaConnectionOptions, // exported for testability (pure: takes env)
 };
