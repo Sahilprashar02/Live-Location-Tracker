@@ -88,8 +88,8 @@ its expiry, but middleware that needs a session store may fail first.
 |---|---|
 | Purpose | Decouple location ingest from fan-out and batched persistence |
 | Protocol | Kafka protocol via `kafkajs` 2.2.4 |
-| Auth | None in production: plaintext on `platform-network` |
-| Env vars | `KAFKA_BROKER` (required); optional TLS/SASL variables in `backend/src/config/kafka.js` |
+| Auth | Today: none, plaintext on `platform-network` (`global-kafka:9092`). Supported: SCRAM-SHA-512 on the shared broker's SASL listener (`global-kafka:9094`) once the Infra repo enables `compose.kafka-sasl.yml`. The `llt` user then holds ACLs for topic prefix `location-` and groups `broadcast-group` / `db-processor-group` only |
+| Env vars | `KAFKA_BROKER` (required); optional TLS/SASL variables (`KAFKA_USERNAME`, `KAFKA_PASSWORD`, `KAFKA_SASL_MECHANISM`, `KAFKA_SSL`, mTLS triple) in `backend/src/config/kafka.js` |
 | Topic | `location-updates`, **1 partition**, replication factor 1, auto-created if absent |
 | Consumer groups | `broadcast-group`, `db-processor-group` |
 | Retry | KafkaJS `initialRetryTime: 1000`, `retries: 10` |
