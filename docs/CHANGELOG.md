@@ -21,6 +21,46 @@
 Newest first. Record real commits — a changelog written from memory drifts
 from the history within weeks.
 
+## 2026-11-13 — Per-app production networks replace `platform-network`
+
+**What changed**
+
+`docker-compose.prod.yml` attaches `llt-backend` to two external networks owned
+by the Infra repo (`scripts/create-networks.sh`) instead of the flat shared
+`platform-network`:
+
+- `infra-app-llt`: `llt-backend`, `global-nginx`, `global-prometheus` (ingress
+  incl. Socket.IO, `/metrics` scraping; has egress, needed for Google OAuth).
+- `infra-data-llt` (`--internal`, no egress): `llt-backend`, `global-mongodb`,
+  `global-kafka`.
+
+`scripts/deploy.sh` preflight now checks that both networks exist instead of
+`platform-network`. Docs and `.env.production.example` now describe the new
+layout and the current Kafka setup: `global-kafka:9094` with SCRAM-SHA-512 and
+per-app ACLs (`llt`: topic prefix `location-`, groups `broadcast-group` /
+`db-processor-group`), using the client support from the entry below. Hostnames
+are unchanged (`global-mongodb`, `global-kafka`, `llt-backend:5000`).
+
+**Why**
+
+Network segmentation. On `platform-network` the backend could reach every other
+app, Redis, PostgreSQL, and the exporters. The Infra repo replaced it with
+per-app networks; the container was re-attached live, and this makes it
+permanent so the next deploy, which recreates the container from this compose
+file, keeps it.
+
+**Evidence**
+
+- Live server state on 2026-11-13 was verified by the Infra operator, not from
+  this repository: both networks exist and are external, `llt-backend` is
+  attached, nginx/Prometheus reach `llt-backend:5000`, and the backend reaches
+  `global-mongodb` and `global-kafka:9094`.
+- Locally: `docker compose -f docker-compose.prod.yml config -q` succeeds with a
+  placeholder env file, and the rendered `networks:` section lists both
+  networks as external. `bash -n` passes on the shell scripts.
+- Not yet verified: a deploy from this compose file. Merging to `main` triggers
+  the deploy workflow, which recreates `llt-backend` with these networks.
+
 ## 2026-11-13 — Configurable Kafka SASL mechanism and TLS
 
 **What changed**

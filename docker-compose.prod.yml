@@ -7,7 +7,8 @@
 # the Infra repo (/opt/apps/infra) and is NOT defined here.
 #
 # Prerequisites (one-time, on the server):
-#   - docker network create platform-network        (pre-exists)
+#   - Networks infra-app-llt and infra-data-llt exist (created by the Infra
+#     repo: /opt/apps/infra/scripts/create-networks.sh). LLT never creates them.
 #   - global-mongodb running; user created via:
 #       /opt/apps/infra/scripts/add-app-mongo-user.sh location_tracker location_tracker_user '<pass>'
 #   - global-kafka running (Infra compose):  docker compose up -d kafka
@@ -32,7 +33,7 @@ services:
     image: llt-backend:latest
     container_name: llt-backend
     restart: unless-stopped
-    # NO ports exposed to host — global-nginx reaches it via platform-network.
+    # NO ports exposed to host — global-nginx reaches it via infra-app-llt.
     env_file:
       - .env
     environment:
@@ -41,7 +42,8 @@ services:
       - NODE_ENV=production
       - PORT=5000
     networks:
-      - platform-network
+      - infra-app-llt
+      - infra-data-llt
     healthcheck:
       # /health returns 200 only when MongoDB is connected, else 503.
       test: ["CMD", "wget", "-qO-", "http://localhost:5000/health"]
@@ -62,9 +64,17 @@ services:
           cpus: "1.0"
           memory: 1G
 
-# ─── External Network ────────────────────────────────────────────────────────
-# Shared with global infrastructure (nginx, mongodb, redis, kafka).
-# Create once on the server if missing: docker network create platform-network
+# ─── External Networks ───────────────────────────────────────────────────────
+# Per-app networks created and owned by the Infra repo
+# (/opt/apps/infra/scripts/create-networks.sh); LLT never creates or removes them.
+#   infra-app-llt   llt-backend + global-nginx + global-prometheus
+#                   (ingress incl. Socket.IO, /metrics scraping; has egress,
+#                   needed for Google OAuth)
+#   infra-data-llt  llt-backend + global-mongodb + global-kafka
+#                   (internal: no egress)
+# LLT cannot reach other apps, Redis, PostgreSQL or the exporters.
 networks:
-  platform-network:
+  infra-app-llt:
+    external: true
+  infra-data-llt:
     external: true

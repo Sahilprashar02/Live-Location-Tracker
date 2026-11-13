@@ -22,7 +22,7 @@ for the backend is terminated by the shared `global-nginx` container.
 The backend writes every location event to Kafka. Two independent consumer
 groups read the same topic: one broadcasts to connected sockets, the other
 batches writes into MongoDB. Both MongoDB and Kafka are shared, server-level
-Docker containers on `platform-network`.
+Docker containers, reached over the internal per-app network `infra-data-llt`.
 
 ```mermaid
 graph TD
@@ -128,7 +128,7 @@ Generated and ignored: `backend/node_modules/`, `frontend/node_modules/`,
 |---|---|
 | Process model | **One** Node.js process per backend container (`node src/server.js`); no PM2 cluster, no horizontal replicas |
 | Container | `llt-backend`, image `llt-backend:latest`, `restart: unless-stopped`, memory limit `1G`, no published host port |
-| Network | `platform-network` (external Docker network), shared with nginx, MongoDB, and Kafka |
+| Network | Two external per-app networks owned by the Infra repo: `infra-app-llt` (with `global-nginx` and `global-prometheus`; has egress for Google OAuth) and `infra-data-llt` (`--internal`, no egress; with `global-mongodb` and `global-kafka`). The backend cannot reach other apps, Redis, PostgreSQL, or the exporters |
 | Scaling limit | WebSocket fan-out and Kafka ordering both assume a single process and a single partition |
 | Why that limit exists | `activeUsers` and `rateLimitMap` are in-memory `Map`s; the broadcast consumer has an in-memory dedup cache; there is no Socket.IO Redis adapter and no sticky-session layer. A second replica would not see the first replica's sockets, so events would be silently missing. |
 
@@ -148,7 +148,7 @@ ordering and the single-partition consumer assumption.
 2. Vercel matches the `/api/:path*` rewrite and proxies to
    `https://llt.140-245-27-200.sslip.io/api/:path*`.
 3. `global-nginx` terminates TLS and proxies to `llt-backend:5000` over
-   `platform-network`. The app-specific vhost is tracked at
+   `infra-app-llt`. The app-specific vhost is tracked at
    `deploy/nginx/llt.conf` and installed into the shared nginx config dir only
    by an explicit, confirm-gated script.
 4. Express runs `express.json()`, `express-session` (Mongo-backed), Passport

@@ -217,12 +217,13 @@ are.
 ### 7.1 Observability
 
 The shared Oracle host now runs Prometheus, Grafana, node-exporter, cAdvisor,
-blackbox-exporter, and kafka-exporter on `platform-network`. Prometheus and
+blackbox-exporter, and kafka-exporter (Infra-managed). Prometheus and
 Grafana publish loopback-only ports, so they are reached through an SSH tunnel,
 not the public internet.
 
-The LLT backend exposes `/metrics` on its internal container port. The public
-nginx vhost returns `404` for `/metrics`. The endpoint exports:
+The LLT backend exposes `/metrics` on its internal container port; `global-prometheus`
+scrapes it over the per-app network `infra-app-llt`. The backend shares no network
+with the exporters. The public nginx vhost returns `404` for `/metrics`. The endpoint exports:
 
 - Node process/runtime metrics (CPU, memory, event-loop lag, GC, handles)
 - `llt_active_socket_connections` and `llt_active_users`

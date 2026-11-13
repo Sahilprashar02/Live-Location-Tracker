@@ -16,8 +16,10 @@ Trust boundaries:
    the frontend.
 3. **Browser → backend (Socket.IO).** The WebSocket bypasses Vercel. The socket
    handshake is authenticated with a JWT, a session cookie, or a share code.
-4. **Backend → MongoDB/Kafka.** Both are on the shared
-   `platform-network`; neither is exposed to the public internet.
+4. **Backend → MongoDB/Kafka.** Both are reached over the Infra-owned
+   `infra-data-llt` network (`--internal`, no egress); neither is exposed to
+   the public internet. Kafka requires the `llt` SCRAM user. The backend
+   shares no network with other apps, Redis, PostgreSQL, or the exporters.
 5. **Third-party APIs.** Google, Esri, OSM, Nominatim, OSRM, Open-Meteo,
    ui-avatars, and CDNs are trusted for their own data but are not
    authenticated identity providers for this app.
@@ -46,14 +48,14 @@ duration, and geofence fields as untrusted input.
 | S13 | CORS is restricted to the exact `CLIENT_URL` with credentials | `server.js` | VERIFIED |
 | S14 | `express.json()` uses the default 100 kB body limit | `server.js` | VERIFIED |
 | S15 | Docker image runs as non-root `appuser` (uid 1001) | `backend/Dockerfile` | VERIFIED |
-| S16 | Backend container publishes **no host port**; nginx reaches it over `platform-network` | `docker-compose.prod.yml` | VERIFIED |
+| S16 | Backend container publishes **no host port**; nginx reaches it over `infra-app-llt` | `docker-compose.prod.yml` | VERIFIED |
 | S17 | `.env` is excluded from git, the Docker build context, and the rsync deploy | `.gitignore`, `backend/.dockerignore`, `.github/workflows/deploy.yml` | VERIFIED |
 | S18 | Startup fails when a required variable is missing | `server.js` `validateEnv()` | VERIFIED |
 | S19 | `/health` returns 503 when MongoDB is disconnected | `server.js` | VERIFIED |
 | S20 | Vercel adds `Cache-Control: no-store` to `/auth/*` and `/api/*` | `frontend/vercel.json` | VERIFIED |
 | S21 | Vercel sends HSTS (`max-age=63072000; includeSubDomains; preload`) | live response headers | VERIFIED |
 | S22 | nginx adds `X-Frame-Options: SAMEORIGIN`, `X-Content-Type-Options: nosniff`, `X-XSS-Protection`, and `Referrer-Policy` | live response headers | VERIFIED |
-| S23 | `/metrics` is scraped only over `platform-network`; the public nginx vhost returns `404` and the backend publishes no host port | `Infra/nginx/conf.d/llt.conf`, `docker-compose.prod.yml` | VERIFIED |
+| S23 | `/metrics` is scraped only over `infra-app-llt` (by `global-prometheus`); the public nginx vhost returns `404` and the backend publishes no host port | `Infra/nginx/conf.d/llt.conf`, `docker-compose.prod.yml` | VERIFIED |
 
 “Verified” here means the code or a live response was inspected. It does not
 mean an independent penetration test was performed.

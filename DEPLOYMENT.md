@@ -22,11 +22,12 @@ Browser / Vercel frontend
         │  HTTPS
         ▼
 global-nginx            (shared, Infra)          :443
-        │  platform-network
+        │  infra-app-llt
         ▼
 llt-backend             (this project)           :5000 (no host port)
         ├──► global-mongodb   db=location_tracker      (shared, Infra)
-        └──► global-kafka     bootstrap global-kafka:9092 (shared, Infra)
+        └──► global-kafka     bootstrap global-kafka:9094, SASL (shared, Infra)
+        (Mongo + Kafka over infra-data-llt, internal)
 ```
 
 - **Public backend hostname:** `llt.140-245-27-200.sslip.io` (TLS managed by the
@@ -37,7 +38,7 @@ llt-backend             (this project)           :5000 (no host port)
   by Vercel rewrites, so it connects directly to the backend host configured in
   `VITE_SOCKET_URL` (or `VITE_API_BASE`).
 - The backend container publishes **no host port**; global-nginx proxies to it
-  over `platform-network`.
+  over `infra-app-llt`.
 - Socket.IO (polling → websocket) is proxied by `nginx/conf.d/llt.conf` with
   the `Upgrade` headers and long read timeouts. A reviewable copy is tracked at
   `deploy/nginx/llt.conf`; `scripts/install-nginx-vhost.sh --check` compares it
@@ -56,7 +57,9 @@ llt-backend             (this project)           :5000 (no host port)
 | Certbot | Infra | `global-certbot` | auto-renews certs |
 | Backend app | **this project** | `llt-backend` | image `llt-backend:latest` |
 
-Networks: `platform-network` (external, shared).
+Networks: `infra-app-llt` (with nginx + Prometheus; egress) and `infra-data-llt`
+(internal; with MongoDB + Kafka), both external and created by the Infra repo's
+`scripts/create-networks.sh`.
 Volumes: `global-kafka-data`, `global-mongodb-data` (shared). The app has no
 stateful volume of its own.
 
@@ -92,7 +95,7 @@ stateful volume of its own.
 | `NODE_ENV` | `production` |
 | `CLIENT_URL` | `https://live-location-tracker-jade.vercel.app` |
 | `MONGODB_URI` | `mongodb://location_tracker_user:****@global-mongodb:27017/location_tracker?authSource=location_tracker` |
-| `KAFKA_BROKER` | `global-kafka:9092` |
+| `KAFKA_BROKER` | `global-kafka:9094` (with `KAFKA_USERNAME=llt`, `KAFKA_PASSWORD`, `KAFKA_SASL_MECHANISM=scram-sha-512`, `KAFKA_SSL=false`) |
 | `SESSION_SECRET` | random (`openssl rand -hex 32`) |
 | `GOOGLE_CALLBACK_URL` | `https://live-location-tracker-jade.vercel.app/auth/google/callback` |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth credentials |
@@ -109,7 +112,9 @@ https://live-location-tracker-jade.vercel.app/auth/google/callback
 ## 5. Kafka (shared)
 
 The broker is defined once in `Infra/docker-compose.yml` and reused by every
-project. It publishes **no host ports**; clients connect at `global-kafka:9092`.
+project. It publishes **no host ports**; clients connect at `global-kafka:9094` with
+SASL/SCRAM-SHA-512. The plaintext `:9092` listener is loopback-only inside the
+broker; the `localhost:9092` admin commands below run inside it via `docker exec`.
 The app creates its topic (`location-updates`) on startup via the Kafka admin API.
 
 ```bash
